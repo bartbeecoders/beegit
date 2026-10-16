@@ -380,6 +380,72 @@ pub struct RedactData {
     pub purged: bool,
 }
 
+/// One ref (amendment B-4).
+#[derive(Clone, Debug, PartialEq, Serialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct RefView {
+    /// Ref name.
+    pub name: String,
+    /// Target changeset.
+    pub target: String,
+    /// Version (1 at creation, +1 per update).
+    pub version: u64,
+    /// Last update, Unix milliseconds.
+    pub updated_at_unix_ms: i64,
+}
+
+/// `beegit ref list`.
+#[derive(Clone, Debug, PartialEq, Serialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct RefListData {
+    /// Name prefix filter.
+    pub prefix: Option<String>,
+    /// Refs, sorted by name.
+    pub refs: Vec<RefView>,
+}
+
+/// `beegit ref create`, `ref set` and `ref delete`.
+#[derive(Clone, Debug, PartialEq, Serialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct RefChangeData {
+    /// Ref name.
+    pub name: String,
+    /// Target before the change (`None` for a creation).
+    pub old_target: Option<String>,
+    /// Target after the change (`None` for a deletion).
+    pub new_target: Option<String>,
+    /// Version after the change (`None` for a deletion).
+    pub version: Option<u64>,
+}
+
+/// One `beegit ref log` entry (SPEC 4.3.7).
+#[derive(Clone, Debug, PartialEq, Serialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct RefLogEntryView {
+    /// Version this entry produced.
+    pub version: u64,
+    /// Previous target (`None` at creation).
+    pub old_target: Option<String>,
+    /// New target (`None` at deletion).
+    pub new_target: Option<String>,
+    /// Principal that made the change.
+    pub principal: String,
+    /// Time of the change, Unix milliseconds.
+    pub at_unix_ms: i64,
+    /// Changesets landed by this update (their resulting ids).
+    pub landed: Vec<String>,
+}
+
+/// `beegit ref log`.
+#[derive(Clone, Debug, PartialEq, Serialize, JsonSchema)]
+#[schemars(deny_unknown_fields)]
+pub struct RefLogData {
+    /// Ref name.
+    pub name: String,
+    /// Entries, oldest first.
+    pub entries: Vec<RefLogEntryView>,
+}
+
 /// Error envelope (`beegit.cli.error.v1`), printed on stdout under `--json` when a command
 /// fails (PLAN 6.15).
 #[derive(Clone, Debug, PartialEq, Serialize, JsonSchema)]

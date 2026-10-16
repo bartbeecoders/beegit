@@ -5,3 +5,4 @@ Vibecoding/
 .git/
 **/*.log
 deploy/k3s/state/
+dist/

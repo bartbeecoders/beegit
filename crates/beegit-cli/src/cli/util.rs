@@ -187,17 +187,26 @@ pub(crate) fn meta_json(m: Option<&v1::MetaView>, fallback_id: &ObjectId) -> Met
     }
 }
 
-/// `2023-11-14T22:13:20Z +0000` style rendering of a timestamp.
+/// A timestamp in its own time zone, git style: `2023-11-14 20:43:20 -0130` is
+/// 22:13:20 UTC recorded at UTC−01:30 (B-UX-2; previously the UTC time was printed with a
+/// `Z` next to a non-zero offset).
 pub(crate) fn fmt_time(t: &TimeView) -> String {
-    let utc = if t.seconds >= 0 {
-        let st = std::time::UNIX_EPOCH + std::time::Duration::from_secs(t.seconds.unsigned_abs());
-        humantime::format_rfc3339_seconds(st).to_string()
-    } else {
-        format!("@{}", t.seconds)
-    };
     let sign = if t.tz_offset_minutes < 0 { '-' } else { '+' };
     let off = t.tz_offset_minutes.unsigned_abs();
-    format!("{utc} {sign}{:02}{:02}", off / 60, off % 60)
+    let zone = format!("{sign}{:02}{:02}", off / 60, off % 60);
+    let local = t
+        .seconds
+        .saturating_add(t.tz_offset_minutes.saturating_mul(60));
+    match u64::try_from(local) {
+        Ok(secs) => {
+            let st = std::time::UNIX_EPOCH + std::time::Duration::from_secs(secs);
+            // `2023-11-14T20:43:20Z` → `2023-11-14 20:43:20`
+            let text = humantime::format_rfc3339_seconds(st).to_string();
+            let text = text.trim_end_matches('Z').replacen('T', " ", 1);
+            format!("{text} {zone}")
+        }
+        Err(_) => format!("@{} {zone}", t.seconds),
+    }
 }
 
 /// First line of a Meta for one-line rendering (`<redacted>` when redacted).
@@ -263,7 +272,17 @@ mod tests {
             seconds: 1_700_000_000,
             tz_offset_minutes: -90,
         };
-        assert_eq!(fmt_time(&t), "2023-11-14T22:13:20Z -0130");
+        assert_eq!(fmt_time(&t), "2023-11-14 20:43:20 -0130");
+        let east = TimeView {
+            seconds: 1_700_000_000,
+            tz_offset_minutes: 120,
+        };
+        assert_eq!(fmt_time(&east), "2023-11-15 00:13:20 +0200");
+        let utc = TimeView {
+            seconds: 0,
+            tz_offset_minutes: 0,
+        };
+        assert_eq!(fmt_time(&utc), "1970-01-01 00:00:00 +0000");
         assert_eq!(encode_content(b"hi"), ("utf8".into(), "hi".into()));
         assert_eq!(encode_content(&[0xff, 0x00]), ("hex".into(), "ff00".into()));
     }

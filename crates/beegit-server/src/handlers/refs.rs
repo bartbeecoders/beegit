@@ -1,4 +1,5 @@
-//! Handlers: UpdateRef, CreateRef, DeleteRef, GetRefLog (SPEC 7.6, 8.5, 12.4, 17) (P26).
+//! Handlers: UpdateRef, CreateRef, DeleteRef, GetRefLog (SPEC 7.6, 8.5, 12.4, 17) (P26), and
+//! ListRefs (amendment B-4).
 //!
 //! Ref names are required (INVALID_ARGUMENT/missing_field when empty) and validated by
 //! `RefName::parse` (INVALID_ARGUMENT/invalid_ref_name). `RefLogRow` / `LandedEntry` proto
@@ -24,6 +25,10 @@ use tonic::{Request, Response, Status};
 pub const DEFAULT_REF_LOG_LIMIT: usize = 1000;
 /// Upper bound on one GetRefLog page.
 pub const MAX_REF_LOG_LIMIT: usize = 10_000;
+/// ListRefs page size when the request leaves `limit` at 0.
+pub const DEFAULT_LIST_REFS_LIMIT: usize = 1000;
+/// Upper bound on one ListRefs page.
+pub const MAX_LIST_REFS_LIMIT: usize = 10_000;
 
 fn unix_ms(t: SystemTime) -> i64 {
     match t.duration_since(UNIX_EPOCH) {
@@ -197,12 +202,100 @@ pub async fn get_ref_log(
     }))
 }
 
+/// One ListRefs page out of `rows`: names starting with `prefix`, after `after` (exclusive),
+/// sorted by name, at most `limit`; the next page token is the last name when more remain.
+fn list_refs_page(
+    mut rows: Vec<beegit_store::RefRow>,
+    prefix: &str,
+    after: &str,
+    limit: usize,
+) -> v1::ListRefsResponse {
+    rows.retain(|r| r.name.as_str().starts_with(prefix) && r.name.as_str() > after);
+    rows.sort_by(|a, b| a.name.as_str().cmp(b.name.as_str()));
+    let more = rows.len() > limit;
+    rows.truncate(limit);
+    let next_page_token = match (more, rows.last()) {
+        (true, Some(last)) => last.name.as_str().to_owned(),
+        _ => String::new(),
+    };
+    v1::ListRefsResponse {
+        refs: rows
+            .iter()
+            .map(|r| v1::RefInfoMsg {
+                name: r.name.as_str().to_owned(),
+                target: r.target.as_bytes().to_vec(),
+                version: r.version,
+                updated_at_unix_ms: unix_ms(r.updated_at),
+            })
+            .collect(),
+        next_page_token,
+    }
+}
+
+/// `RefService.ListRefs` (amendment B-4): every ref whose name starts with `prefix`, sorted by
+/// name, paged by name. Visible to every repository reader, like `GetRefLog` (refs are not
+/// path-scoped; their ACL rules govern updates only).
+pub async fn list_refs(
+    ctx: &Arc<AppContext>,
+    req: Request<v1::ListRefsRequest>,
+) -> Result<Response<v1::ListRefsResponse>, Status> {
+    let who = caller(&req)?.principal;
+    require_repo_read(ctx, &who)?;
+    let m = req.get_ref();
+    let limit = match usize::try_from(m.limit).unwrap_or(MAX_LIST_REFS_LIMIT) {
+        0 => DEFAULT_LIST_REFS_LIMIT,
+        n => n.min(MAX_LIST_REFS_LIMIT),
+    };
+    let rows = ctx.history.meta().list_refs().await.map_status()?;
+    Ok(Response::new(list_refs_page(
+        rows,
+        &m.prefix,
+        &m.page_token,
+        limit,
+    )))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use beegit_core::{ChangeId, Kind, ObjectId};
     use beegit_store::LandedEntry;
     use std::time::Duration;
+
+    #[test]
+    fn list_refs_pages_by_name_with_prefix() {
+        let row = |n: &str, v: u64| beegit_store::RefRow {
+            name: RefName::parse(n).unwrap(),
+            target: ObjectId::new(Kind::Changeset, [v as u8; 32]),
+            version: v,
+            updated_at: UNIX_EPOCH + Duration::from_millis(v * 1000),
+        };
+        let rows = vec![
+            row("release/2", 2),
+            row("main", 1),
+            row("release/1", 3),
+            row("feature/x", 4),
+            row("release/3", 5),
+        ];
+        let all = list_refs_page(rows.clone(), "", "", 100);
+        let names: Vec<_> = all.refs.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(
+            names,
+            ["feature/x", "main", "release/1", "release/2", "release/3"]
+        );
+        assert!(all.next_page_token.is_empty());
+        assert_eq!(all.refs[1].version, 1);
+        assert_eq!(all.refs[1].updated_at_unix_ms, 1000);
+
+        let p1 = list_refs_page(rows.clone(), "release/", "", 2);
+        let n1: Vec<_> = p1.refs.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(n1, ["release/1", "release/2"]);
+        assert_eq!(p1.next_page_token, "release/2");
+        let p2 = list_refs_page(rows, "release/", &p1.next_page_token, 2);
+        let n2: Vec<_> = p2.refs.iter().map(|r| r.name.as_str()).collect();
+        assert_eq!(n2, ["release/3"]);
+        assert!(p2.next_page_token.is_empty());
+    }
 
     #[test]
     fn ref_log_row_converts() {

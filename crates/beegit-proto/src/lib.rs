@@ -31,6 +31,7 @@ mod client;
 pub mod convert;
 mod endpoint;
 mod grpc_web;
+pub mod hints;
 pub mod raw;
 mod status;
 mod trailers;
@@ -71,7 +72,7 @@ mod tests {
                 ("AuthService", 3),
                 ("ObjectService", 4),
                 ("QueryService", 10),
-                ("RefService", 4),
+                ("RefService", 5),
                 ("WriteService", 5),
             ]
         );

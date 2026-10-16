@@ -79,6 +79,11 @@ commands! {
     "show" => ShowData,
     "cat" => CatData,
     "redact" => RedactData,
+    "ref-list" => RefListData,
+    "ref-create" => RefChangeData,
+    "ref-set" => RefChangeData,
+    "ref-delete" => RefChangeData,
+    "ref-log" => RefLogData,
 }
 
 /// Recursively rebuild `v` with object keys in sorted order, so the published bytes do not
@@ -169,7 +174,7 @@ mod tests {
 
     #[test]
     fn every_command_has_a_valid_schema() {
-        assert_eq!(command_names().len(), 17);
+        assert_eq!(command_names().len(), 22);
         for cmd in command_names().iter().copied().chain([ERROR_SCHEMA]) {
             let s = schema_for(cmd).unwrap();
             assert_eq!(s["title"], json!(schema_id(cmd)));

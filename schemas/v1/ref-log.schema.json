@@ -1,0 +1,95 @@
+{
+  "$defs": {
+    "RefLogData": {
+      "additionalProperties": false,
+      "description": "`beegit ref log`.",
+      "properties": {
+        "entries": {
+          "description": "Entries, oldest first.",
+          "items": {
+            "$ref": "#/$defs/RefLogEntryView"
+          },
+          "type": "array"
+        },
+        "name": {
+          "description": "Ref name.",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "entries"
+      ],
+      "type": "object"
+    },
+    "RefLogEntryView": {
+      "additionalProperties": false,
+      "description": "One `beegit ref log` entry (SPEC 4.3.7).",
+      "properties": {
+        "at_unix_ms": {
+          "description": "Time of the change, Unix milliseconds.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "landed": {
+          "description": "Changesets landed by this update (their resulting ids).",
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "new_target": {
+          "description": "New target (`None` at deletion).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "old_target": {
+          "description": "Previous target (`None` at creation).",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "principal": {
+          "description": "Principal that made the change.",
+          "type": "string"
+        },
+        "version": {
+          "description": "Version this entry produced.",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "version",
+        "principal",
+        "at_unix_ms",
+        "landed"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "`beegit ref-log --json` output envelope (SPEC 11.8; PLAN 6.15).",
+  "properties": {
+    "data": {
+      "$ref": "#/$defs/RefLogData",
+      "description": "Command-specific payload."
+    },
+    "schema": {
+      "const": "beegit.cli.ref-log.v1",
+      "description": "Schema identifier.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "data"
+  ],
+  "title": "beegit.cli.ref-log.v1",
+  "type": "object"
+}

@@ -69,7 +69,7 @@ async fn every_protected_rpc_requires_a_token() {
     let srv = InProcessServer::start(opts()).await;
     let channel = srv.client(None).await.channel();
     let rpcs = descriptor::rpcs();
-    assert_eq!(rpcs.len(), 30, "beegit.v1 has 30 RPCs");
+    assert_eq!(rpcs.len(), 31, "beegit.v1 has 31 RPCs");
     let open = [
         "/beegit.v1.ObjectService/GetServerInfo",
         "/beegit.v1.AuthService/Login",

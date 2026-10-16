@@ -202,6 +202,13 @@ impl v1::ref_service_server::RefService for GrpcServices {
     ) -> Result<Response<v1::GetRefLogResponse>, Status> {
         handlers::refs::get_ref_log(&self.ctx, request).await
     }
+
+    async fn list_refs(
+        &self,
+        request: Request<v1::ListRefsRequest>,
+    ) -> Result<Response<v1::ListRefsResponse>, Status> {
+        handlers::refs::list_refs(&self.ctx, request).await
+    }
 }
 
 #[tonic::async_trait]

@@ -1,0 +1,80 @@
+{
+  "$defs": {
+    "RefListData": {
+      "additionalProperties": false,
+      "description": "`beegit ref list`.",
+      "properties": {
+        "prefix": {
+          "description": "Name prefix filter.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "refs": {
+          "description": "Refs, sorted by name.",
+          "items": {
+            "$ref": "#/$defs/RefView"
+          },
+          "type": "array"
+        }
+      },
+      "required": [
+        "refs"
+      ],
+      "type": "object"
+    },
+    "RefView": {
+      "additionalProperties": false,
+      "description": "One ref (amendment B-4).",
+      "properties": {
+        "name": {
+          "description": "Ref name.",
+          "type": "string"
+        },
+        "target": {
+          "description": "Target changeset.",
+          "type": "string"
+        },
+        "updated_at_unix_ms": {
+          "description": "Last update, Unix milliseconds.",
+          "format": "int64",
+          "type": "integer"
+        },
+        "version": {
+          "description": "Version (1 at creation, +1 per update).",
+          "format": "uint64",
+          "minimum": 0,
+          "type": "integer"
+        }
+      },
+      "required": [
+        "name",
+        "target",
+        "version",
+        "updated_at_unix_ms"
+      ],
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "description": "`beegit ref-list --json` output envelope (SPEC 11.8; PLAN 6.15).",
+  "properties": {
+    "data": {
+      "$ref": "#/$defs/RefListData",
+      "description": "Command-specific payload."
+    },
+    "schema": {
+      "const": "beegit.cli.ref-list.v1",
+      "description": "Schema identifier.",
+      "type": "string"
+    }
+  },
+  "required": [
+    "schema",
+    "data"
+  ],
+  "title": "beegit.cli.ref-list.v1",
+  "type": "object"
+}

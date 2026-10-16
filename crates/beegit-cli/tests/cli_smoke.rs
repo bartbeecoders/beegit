@@ -238,6 +238,10 @@ async fn commands_work_through_the_daemon_endpoint() {
     assert_eq!(c.code, 0, "{}", c.stderr);
     let l = beegit(&env, &["-C", wcs, "land", "--ref", "main"]).await;
     assert_eq!(l.code, 0, "{}", l.stderr);
+    // RPCs the daemon does not serve itself, such as ListRefs, are forwarded upstream.
+    let refs = beegit(&env, &["ref", "list"]).await;
+    assert_eq!(refs.code, 0, "{}", refs.stderr);
+    assert!(refs.text().starts_with("main "), "{}", refs.text());
     // The endpoint from BEEGIT_ENDPOINT is pinned in .beegit/config.toml at checkout.
     let mut no_ep = env.clone();
     no_ep.0.remove("BEEGIT_ENDPOINT");
@@ -257,6 +261,40 @@ async fn commands_work_through_the_daemon_endpoint() {
     .await;
     assert_eq!(flag.code, 0, "{}", flag.stderr);
     assert!(flag.text().contains(" via daemon"), "{}", flag.text());
+}
+
+/// `beegit log main` filters on a path named `main`; when that finds nothing and `main` is a
+/// revision, the CLI says to use `--rev` instead of printing nothing (B-UX-1).
+#[tokio::test(flavor = "multi_thread")]
+async fn log_with_a_revision_as_the_path_points_at_rev() {
+    let h = Harness::start(false).await;
+    let env = h.env_as("alice");
+    let wc = h.path("wc");
+    let wcs = wc.to_str().unwrap();
+    assert_eq!(beegit(&env, &["checkout", "main", wcs]).await.code, 0);
+    std::fs::write(wc.join("a.txt"), b"a\n").unwrap();
+    assert_eq!(
+        beegit(&env, &["-C", wcs, "commit", "-m", "add a"])
+            .await
+            .code,
+        0
+    );
+    assert_eq!(beegit(&env, &["-C", wcs, "land"]).await.code, 0);
+
+    let mistaken = beegit(&env, &["log", "main"]).await;
+    assert_eq!(mistaken.code, 2, "{}", mistaken.stderr);
+    assert!(
+        mistaken.stderr.contains("beegit log --rev main"),
+        "{}",
+        mistaken.stderr
+    );
+    // A real path and a path with no history (not a revision) behave as before.
+    let real = beegit(&env, &["log", "a.txt", "--oneline"]).await;
+    assert_eq!(real.code, 0, "{}", real.stderr);
+    assert!(real.text().contains("add a"), "{}", real.text());
+    let none = beegit(&env, &["log", "no/such/path"]).await;
+    assert_eq!(none.code, 0, "{}", none.stderr);
+    assert!(none.text().is_empty());
 }
 
 /// The whole write path (upload, commit, land) and reads over a `grpc-web+https://` endpoint,

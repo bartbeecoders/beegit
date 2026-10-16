@@ -256,12 +256,17 @@ where
     }
 }
 
+/// `e` and its sources joined with `: `, skipping a source whose text is already present
+/// (libraries often repeat their cause in their own message).
 fn error_chain(e: &(dyn std::error::Error + 'static)) -> String {
     let mut out = e.to_string();
     let mut cur = e.source();
     while let Some(s) = cur {
-        out.push_str(": ");
-        out.push_str(&s.to_string());
+        let text = s.to_string();
+        if !out.contains(&text) {
+            out.push_str(": ");
+            out.push_str(&text);
+        }
         cur = s.source();
     }
     out
@@ -270,7 +275,10 @@ fn error_chain(e: &(dyn std::error::Error + 'static)) -> String {
 fn unavailable(ep: &Endpoint, e: &(dyn std::error::Error + 'static)) -> BeeGitError {
     BeeGitError::unavailable(
         subcode::UPSTREAM_UNAVAILABLE,
-        format!("cannot connect to {ep}: {}", error_chain(e)),
+        crate::hints::with_hint(
+            format!("cannot connect to {ep}: {}", error_chain(e)),
+            Some(ep),
+        ),
     )
 }
 

@@ -114,12 +114,28 @@ beegit sparse --help              # change the sparse profile later
 Endpoints: `https://host:port` (gRPC), `grpc-web+https://host` (gRPC-Web, for proxies such as
 Cloudflare Tunnel that drop HTTP/2 trailers) or `unix:///path` (a local daemon).
 
+### Refs (branches)
+
+```sh
+beegit ref list                         # every ref: name, tip, version, last update
+beegit ref list release/                # only refs starting with release/
+beegit ref create release/1 main~3      # needs admin.refs; --reason is audited
+beegit ref set release/1 main           # compare-and-swap move; --force for non-fast-forward
+beegit ref log release/1                # every version: who moved it, from what, what landed
+beegit ref delete release/1 --reason done
+```
+
 Every command supports `--json`, printing one line `{"schema":"beegit.cli.<cmd>.v1","data":…}`
 (schemas in [`schemas/v1`](../schemas/v1)). Exit codes: 0 ok, 1 error, 2 usage, 3 conflicts,
 4 refused because of dirty files.
 
 Revisions: a changeset id or unique prefix (≥ 8 hex), a ref name, `<ref>@<version>`,
-`git:<sha>` (imported commits), with suffixes `~n` and `^k`.
+`git:<sha>` (imported commits), with suffixes `~n` and `^k`. `beegit log <path>` filters by path;
+the starting revision goes in `--rev` (`beegit log --rev release/1 docs/`). Dates are shown in
+the author's own time zone, git style (`2026-10-16 11:42:26 +0200`).
+
+Connection problems end with a `hint:` naming the likely fix (wrong CA file, host name not in
+the certificate, nothing listening, socket path too long, a proxy dropping gRPC trailers).
 
 Run `dev/smoke.sh` at any time for a scripted end-to-end check. It uses a throw-away `HOME`, so
 it never touches your real credentials.

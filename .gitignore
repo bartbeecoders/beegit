@@ -4,3 +4,4 @@ target/
 # Local dev state (certs, keys, tokens, data)
 /dev/state/
 /deploy/k3s/state/
+/dist/

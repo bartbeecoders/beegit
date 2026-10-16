@@ -14,6 +14,7 @@ mod ctx;
 mod error;
 mod query;
 mod redact;
+mod refs;
 mod util;
 mod wc_cmds;
 
@@ -134,6 +135,7 @@ async fn dispatch(cmd: &Cmd, ctx: &mut Ctx<'_>, io: &mut dyn CliIo) -> CliResult
         Cmd::Show(a) => query::show(ctx, a).await,
         Cmd::Cat(a) => query::cat(ctx, a).await,
         Cmd::Redact(a) => redact::redact(ctx, a).await,
+        Cmd::Ref { action } => refs::run(ctx, action).await,
     }
 }
 

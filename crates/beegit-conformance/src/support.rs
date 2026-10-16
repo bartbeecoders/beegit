@@ -572,9 +572,9 @@ mod tests {
     }
 
     #[test]
-    fn descriptor_lists_thirty_rpcs() {
+    fn descriptor_lists_thirty_one_rpcs() {
         let rpcs = TestCluster::rpcs();
-        assert_eq!(rpcs.len(), 30);
+        assert_eq!(rpcs.len(), 31);
         assert!(
             rpcs.iter()
                 .any(|r| r.path == "/beegit.v1.WriteService/UploadObjects"

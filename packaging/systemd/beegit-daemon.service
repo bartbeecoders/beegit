@@ -1,0 +1,24 @@
+# BeeGit node daemon as a systemd *user* service: a local object cache shared by every working
+# copy and job of this user (docs/getting-started.md, "The node daemon").
+#
+#   mkdir -p ~/.config/systemd/user ~/.config/beegit
+#   cp beegit-daemon.service ~/.config/systemd/user/
+#   cp beegit-daemon.toml.example ~/.config/beegit/daemon.toml   # then edit `upstream`
+#   systemctl --user daemon-reload && systemctl --user enable --now beegit-daemon
+#   export BEEGIT_ENDPOINT=unix://$XDG_RUNTIME_DIR/beegit/daemon.sock
+[Unit]
+Description=BeeGit node daemon (shared object cache)
+Documentation=https://github.com/bartbeecoders/beegit
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+# %h = home directory; RuntimeDirectory creates $XDG_RUNTIME_DIR/beegit for the socket.
+ExecStart=%h/.local/bin/beegit-daemon --config %h/.config/beegit/daemon.toml
+RuntimeDirectory=beegit
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=default.target

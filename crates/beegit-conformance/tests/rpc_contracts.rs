@@ -26,6 +26,63 @@ use std::sync::Arc;
 use std::time::{Duration, Instant, SystemTime};
 use tonic::metadata::MetadataMap;
 
+async fn case_list_refs(env: &Env, via: Via) {
+    let t = tier_of(via, "ListRefs");
+    let alice = env.client(via, "alice").await;
+    let list = |prefix: &str, limit: u32, page_token: &str| v1::ListRefsRequest {
+        prefix: prefix.to_owned(),
+        limit,
+        page_token: page_token.to_owned(),
+    };
+    let r = ok(alice.refs().list_refs(list("", 0, "")).await, t, "ListRefs");
+    let names: Vec<&str> = r.refs.iter().map(|x| x.name.as_str()).collect();
+    assert!(names.contains(&"main"), "{names:?}");
+    let mut sorted = names.clone();
+    sorted.sort_unstable();
+    assert_eq!(names, sorted, "ListRefs is sorted by name");
+    let main = r.refs.iter().find(|x| x.name == "main").unwrap();
+    assert!(main.version >= 1 && !main.target.is_empty());
+
+    // Prefix filter and paging by name.
+    let prefix = format!("lr-{}-", via.as_str());
+    create_ref(env, &format!("{prefix}a"), &env.c1).await;
+    create_ref(env, &format!("{prefix}b"), &env.c1).await;
+    let p1 = ok(
+        alice.refs().list_refs(list(&prefix, 1, "")).await,
+        t,
+        "ListRefs page 1",
+    );
+    assert_eq!(p1.refs.len(), 1);
+    assert_eq!(p1.refs[0].name, format!("{prefix}a"));
+    assert_eq!(p1.refs[0].target, idb(&env.c1));
+    assert_eq!(p1.next_page_token, format!("{prefix}a"));
+    let p2 = ok(
+        alice
+            .refs()
+            .list_refs(list(&prefix, 1, &p1.next_page_token))
+            .await,
+        t,
+        "ListRefs page 2",
+    );
+    assert_eq!(p2.refs.len(), 1);
+    assert_eq!(p2.refs[0].name, format!("{prefix}b"));
+    assert!(p2.next_page_token.is_empty());
+
+    err(
+        env.client(via, "mallory")
+            .await
+            .refs()
+            .list_refs(list("", 0, ""))
+            .await,
+        ErrorCode::PermissionDenied,
+        None,
+        t,
+        "ListRefs without repository read",
+    );
+    env.unknown_fields_ok(via, "ListRefs", list("", 0, "").encode_to_vec(), "alice")
+        .await;
+}
+
 // ---------------------------------------------------------------------------------------
 // The SPEC 7.2 table (independent of `ErrorCode::grpc_code` / `retryable`).
 // ---------------------------------------------------------------------------------------
@@ -2304,6 +2361,7 @@ async fn run_case(env: &Env, method: &str, via: Via) -> bool {
         "CreateRef" => case_create_ref(env, via).await,
         "DeleteRef" => case_delete_ref(env, via).await,
         "GetRefLog" => case_get_ref_log(env, via).await,
+        "ListRefs" => case_list_refs(env, via).await,
         "Login" => case_login(env, via).await,
         "WhoAmI" => case_who_am_i(env, via).await,
         "CheckAccess" => case_check_access(env, via).await,
@@ -2393,6 +2451,7 @@ fn every_descriptor_rpc_has_a_contract_case() {
         "CreateRef",
         "DeleteRef",
         "GetRefLog",
+        "ListRefs",
         "Login",
         "WhoAmI",
         "CheckAccess",

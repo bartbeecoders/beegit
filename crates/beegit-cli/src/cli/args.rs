@@ -96,6 +96,11 @@ pub(crate) enum Cmd {
     Cat(CatArgs),
     /// Redact objects (admin).
     Redact(RedactArgs),
+    /// List, create, move, delete refs and show their history.
+    Ref {
+        #[command(subcommand)]
+        action: RefCmd,
+    },
 }
 
 impl Cmd {
@@ -119,6 +124,13 @@ impl Cmd {
             Cmd::Show(_) => "show",
             Cmd::Cat(_) => "cat",
             Cmd::Redact(_) => "redact",
+            Cmd::Ref { action } => match action {
+                RefCmd::List { .. } => "ref-list",
+                RefCmd::Create { .. } => "ref-create",
+                RefCmd::Set { .. } => "ref-set",
+                RefCmd::Delete { .. } => "ref-delete",
+                RefCmd::Log { .. } => "ref-log",
+            },
         }
     }
 }
@@ -159,6 +171,54 @@ pub(crate) struct CheckoutArgs {
     /// Sparse profile prefixes (default: the whole tree).
     #[arg(long, num_args = 1.., value_name = "PATH")]
     pub sparse: Vec<String>,
+}
+
+#[derive(Subcommand, Debug)]
+pub(crate) enum RefCmd {
+    /// List refs, sorted by name.
+    List {
+        /// Only refs whose name starts with PREFIX (e.g. `release/`).
+        prefix: Option<String>,
+    },
+    /// Create a ref at a revision (admin.refs).
+    Create {
+        /// Ref name.
+        name: String,
+        /// Revision the ref points at.
+        rev: String,
+        /// Reason recorded in the audit log.
+        #[arg(long, default_value = "")]
+        reason: String,
+    },
+    /// Move an existing ref to a revision (compare-and-swap on its current version).
+    Set {
+        /// Ref name.
+        name: String,
+        /// New target revision.
+        rev: String,
+        /// Allow a non-fast-forward move (needs `force` on the ref).
+        #[arg(long)]
+        force: bool,
+    },
+    /// Delete a ref (admin.refs).
+    Delete {
+        /// Ref name.
+        name: String,
+        /// Only delete when the ref is at this version (default: its current version).
+        #[arg(long, value_name = "N")]
+        expected_version: Option<u64>,
+        /// Reason recorded in the audit log.
+        #[arg(long, default_value = "")]
+        reason: String,
+    },
+    /// Show a ref's history: every version, who moved it and what landed.
+    Log {
+        /// Ref name.
+        name: String,
+        /// At most N entries (newest last).
+        #[arg(long, value_name = "N")]
+        limit: Option<u32>,
+    },
 }
 
 #[derive(Subcommand, Debug)]

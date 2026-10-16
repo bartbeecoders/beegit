@@ -310,6 +310,37 @@ pub async fn scripted_session(h: &Harness, json: bool) -> Vec<Step> {
         0,
         ["blame", "a.txt", "--rev", "main"]
     );
+    // Ref management (amendment B-4): create (admin.refs), list, fast-forward, log, delete.
+    step!(
+        "ref-create",
+        "ref-create",
+        &admin,
+        0,
+        ["ref", "create", "release/1", "main~1", "--reason", "cut"]
+    );
+    step!(
+        "ref-create-denied",
+        "error",
+        &alice,
+        1,
+        ["ref", "create", "release/2", "main"]
+    );
+    step!("ref-list", "ref-list", &alice, 0, ["ref", "list"]);
+    step!(
+        "ref-set",
+        "ref-set",
+        &admin,
+        0,
+        ["ref", "set", "release/1", "main"]
+    );
+    step!("ref-log", "ref-log", &alice, 0, ["ref", "log", "release/1"]);
+    step!(
+        "ref-delete",
+        "ref-delete",
+        &admin,
+        0,
+        ["ref", "delete", "release/1", "--reason", "done"]
+    );
     step!(
         "checkout-sparse",
         "checkout",

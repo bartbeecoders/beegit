@@ -1,0 +1,12 @@
+# beegit-daemon configuration (SPEC 6.3). Copy to ~/.config/beegit/daemon.toml.
+# Paths must be absolute; replace USER and the upstream.
+
+# Keep the socket path short (Unix sockets allow about 103 bytes).
+socket = "/run/user/1000/beegit/daemon.sock"
+
+# The BeeGit server. Behind Cloudflare Tunnel use the grpc-web+https:// form.
+upstream = "grpc-web+https://beegit.hideterms.com"
+# upstream_ca = "/home/USER/.config/beegit/ca.pem"   # only for a private CA
+
+cache_dir = "/home/USER/.cache/beegit"
+max_cache_bytes = 10737418240   # 10 GiB

@@ -21,6 +21,18 @@ list of changes.
 | **Protocol** | gRPC or gRPC-Web over TLS (`beegit.v1`), BLAKE3 object ids, zstd compression |
 | **Roadmap** | [docs/plan.html](docs/plan.html) — improvements and tasks |
 
+## Install the client
+
+```sh
+curl -fsSL https://github.com/bartbeecoders/beegit/releases/latest/download/install.sh | sh
+export BEEGIT_ENDPOINT=grpc-web+https://beegit.hideterms.com
+beegit login
+```
+
+Installs `beegit`, `beegit-daemon` and `beegit-import` into `~/.local/bin` (Linux x86_64/arm64,
+macOS) after verifying the release checksum. From a checkout: `scripts/package-client.sh` then
+`BEEGIT_ARCHIVE=dist/beegit-<version>-<target>.tar.gz scripts/install.sh`.
+
 ## Quick start (local, about 5 minutes)
 
 Prerequisites: Rust via rustup, `protoc`, `openssl`, and Docker **or** Podman with Compose.
@@ -117,6 +129,11 @@ scripts/test-external.sh --up --all   # the suite against real CockroachDB + Min
 
 See [docs/testing.md](docs/testing.md) and [docs/upstream-sync.md](docs/upstream-sync.md)
 for pulling fixes from upstream Scion.
+
+**Releasing the client:** bump `version` in `Cargo.toml` (`[workspace.package]`), commit, then
+`git tag v<version> && git push origin v<version>`. `.github/workflows/release.yml` builds
+Linux x86_64/arm64 and macOS arm64/x86_64 archives with `scripts/package-client.sh` and
+publishes them, their `.sha256` files and `install.sh` as a GitHub release.
 
 ## Documentation
 

@@ -86,6 +86,29 @@ async fn every_command_json_validates_against_its_published_schema() {
     assert!(covered.contains("error"));
 
     let by = cli_support::by_label(&steps);
+    let refs = by["ref-list"].out.json();
+    let names: Vec<&str> = refs["data"]["refs"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(names, ["main", "release/1"]);
+    let set = by["ref-set"].out.json();
+    assert_eq!(set["data"]["version"], 2);
+    assert_ne!(set["data"]["old_target"], set["data"]["new_target"]);
+    let rlog = by["ref-log"].out.json();
+    let versions: Vec<u64> = rlog["data"]["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e["version"].as_u64().unwrap())
+        .collect();
+    assert_eq!(versions, [1, 2]);
+    let denied = by["ref-create-denied"].out.json();
+    assert_eq!(denied["data"]["code"], "PERMISSION_DENIED");
+    let deleted = by["ref-delete"].out.json();
+    assert!(deleted["data"]["new_target"].is_null());
     let conflict = by["rebase-conflict"].out.json();
     assert_eq!(conflict["data"]["conflicts"], serde_json::json!(["a.txt"]));
     let dirty = by["goto-dirty"].out.json();

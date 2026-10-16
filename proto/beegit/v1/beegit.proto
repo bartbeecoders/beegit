@@ -56,6 +56,8 @@ service RefService {
   rpc CreateRef(CreateRefRequest) returns (CreateRefResponse);
   rpc DeleteRef(DeleteRefRequest) returns (DeleteRefResponse);
   rpc GetRefLog(GetRefLogRequest) returns (GetRefLogResponse);
+  // BeeGit addition (amendment B-4): every ref, sorted by name, for repository readers.
+  rpc ListRefs(ListRefsRequest) returns (ListRefsResponse);
 }
 
 // Auth RPCs (SPEC 7.7).
@@ -577,6 +579,28 @@ message RefLogEntryMsg {
 
 message GetRefLogResponse {
   repeated RefLogEntryMsg entries = 1;
+}
+
+// Refs whose name starts with `prefix` (empty: all), sorted by name. `page_token` is the
+// `next_page_token` of the previous page (empty for the first); `limit` 0 means the default
+// page size (1000, at most 10000).
+message ListRefsRequest {
+  string prefix = 1;
+  uint32 limit = 2;
+  string page_token = 3;
+}
+
+message RefInfoMsg {
+  string name = 1;
+  bytes target = 2;
+  uint64 version = 3;
+  int64 updated_at_unix_ms = 4;
+}
+
+// `next_page_token` is empty on the last page.
+message ListRefsResponse {
+  repeated RefInfoMsg refs = 1;
+  string next_page_token = 2;
 }
 
 // ---------------------------------------------------------------------------------------------

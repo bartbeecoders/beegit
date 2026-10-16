@@ -138,6 +138,18 @@ pub(crate) async fn log(ctx: &mut Ctx<'_>, a: &LogArgs) -> CliResult<Reply> {
     if let Some(l) = a.limit {
         entries.truncate(l as usize);
     }
+    // `beegit log main` filters on a path called `main`. When that finds nothing and the
+    // argument is also a revision, the user almost certainly meant `--rev` (B-UX-1).
+    if entries.is_empty()
+        && a.rev.is_none()
+        && let Some(p) = a.path.as_deref()
+        && resolve(&client, p).await.is_ok()
+    {
+        return Err(usage(format!(
+            "no changesets touch the path {p:?}, but {p:?} is a revision; \
+             use `beegit log --rev {p}` (or `beegit log --rev {p} <path>`)"
+        )));
+    }
     let mut human = String::new();
     for e in &entries {
         if a.oneline {

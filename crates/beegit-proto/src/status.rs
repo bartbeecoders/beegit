@@ -82,6 +82,18 @@ pub fn error_from_status(s: &tonic::Status) -> BeeGitError {
     } else {
         s.message().to_owned()
     };
+    // Statuses without a BeeGit ErrorDetail come from the transport or a proxy, not the
+    // server: add a hint when the cause is recognizable (B-UX-3).
+    let message = match s.code() {
+        tonic::Code::Unavailable | tonic::Code::Internal | tonic::Code::Unknown => {
+            crate::hints::with_hint(message, None)
+        }
+        tonic::Code::Unimplemented => format!(
+            "{message}; hint: the server does not support this call; it is probably older \
+             than this client, so upgrade the server"
+        ),
+        _ => message,
+    };
     BeeGitError::new(code, message)
 }
 
@@ -125,7 +137,12 @@ mod tests {
         for (c, want) in cases {
             let e = error_from_status(&tonic::Status::new(c, "boom"));
             assert_eq!(e.code, want, "{c:?}");
-            assert_eq!(e.message, "boom");
+            if c == tonic::Code::Unimplemented {
+                // An older server: the message says so (B-UX-3).
+                assert!(e.message.starts_with("boom; hint: "), "{}", e.message);
+            } else {
+                assert_eq!(e.message, "boom");
+            }
             assert_eq!(e.payload, ErrorPayload::None);
         }
         // Garbage details fall back to the gRPC code.
