@@ -1,18 +1,18 @@
 #!/usr/bin/env bash
 # Start BeeGit on this machine: CockroachDB + MinIO in containers, plus beegit-server.
 #
-#   ./start.sh                start (server in a container) and print how to connect
-#   ./start.sh --native       run beegit-server from source (release build) instead
-#   ./start.sh --smoke        also run the end-to-end smoke test once it is up
-#   ./start.sh --stop         stop everything (data is kept)
-#   ./start.sh --reset        stop everything and delete all data
-#   ./start.sh --status       show what is running
-#   ./start.sh --logs         follow the server log
+#   scripts/start.sh                start (server in a container) and print how to connect
+#   scripts/start.sh --native       run beegit-server from source (release build) instead
+#   scripts/start.sh --smoke        also run the end-to-end smoke test once it is up
+#   scripts/start.sh --stop         stop everything (data is kept)
+#   scripts/start.sh --reset        stop everything and delete all data
+#   scripts/start.sh --status       show what is running
+#   scripts/start.sh --logs         follow the server log
 #
 # Uses Docker when its daemon is reachable, else rootless Podman (its user socket is started
 # when needed). Secrets are generated on first run into dev/state (git-ignored).
 set -euo pipefail
-cd "$(dirname "$0")"
+cd "$(dirname "$0")/.."
 ROOT="$PWD"
 STATE="$ROOT/dev/state"
 PIDFILE="$STATE/server.pid"
@@ -75,7 +75,7 @@ wait_ready() {
     fi
     sleep 1
   done
-  die "server not ready after 90s (try ./start.sh --logs)"
+  die "server not ready after 90s (try scripts/start.sh --logs)"
 }
 
 # ---- actions -----------------------------------------------------------------------------------
@@ -158,5 +158,5 @@ $(say "BeeGit is running")
     beegit login --service admin
     beegit checkout main ~/work/demo
 
-  ./start.sh --status | --logs | --stop | --reset
+  scripts/start.sh --status | --logs | --stop | --reset
 EOF

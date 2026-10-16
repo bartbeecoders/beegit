@@ -37,7 +37,7 @@ Four executables come out of the build:
 
 ## 3. Run the local stack
 
-The quickest way is `./start.sh` (add `--native` to run the server from source, `--smoke` to test
+The quickest way is `scripts/start.sh` (add `--native` to run the server from source, `--smoke` to test
 it, `--stop` / `--reset` / `--status` / `--logs` to manage it). It picks Docker or Podman, starts
 Podman's user socket if needed, generates secrets, builds, starts and waits until the server is
 ready. In native mode the server log is `dev/state/server.log`. The sections below describe the
