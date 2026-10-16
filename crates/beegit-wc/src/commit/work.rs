@@ -22,6 +22,10 @@ use beegit_core::{BeeGitError, EntryInfo, ErrorCode, Mode, ObjectId, Result};
 use beegit_object::{Canonical, Meta, RepoPath};
 use std::collections::{BTreeMap, BTreeSet};
 
+/// Blobs above this size are checked against the server's `limits.max_blob_bytes` before
+/// upload.
+const PRECHECK_BLOB_BYTES: u64 = 8 << 20;
+
 /// One working-copy change against the base (SPEC 11.6).
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct WorkChange {
@@ -145,6 +149,20 @@ impl WorkingCopy {
         }
         if blobs.is_empty() {
             return Ok(0);
+        }
+        // Check large blobs against the server's limit before sending them: the server would
+        // refuse them anyway, and a proxy may reject the request with an opaque HTTP error
+        // first. Small commits skip the extra GetServerInfo round trip.
+        let largest = blobs.iter().map(|(_, d)| d.len()).max().unwrap_or(0) as u64;
+        if largest > PRECHECK_BLOB_BYTES
+            && let Some(limit) = rpc::max_blob_bytes(&self.client).await?
+            && largest > limit
+        {
+            return Err(BeeGitError::too_large(
+                beegit_core::subcode::limit_names::MAX_BLOB_BYTES,
+                limit,
+                largest,
+            ));
         }
         rpc::upload_blobs(&self.client, blobs).await
     }

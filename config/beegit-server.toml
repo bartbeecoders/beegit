@@ -31,6 +31,12 @@ signing_keys = ["$BEEGIT_SIGNING_KEY"]   # first key signs; all keys verify
 name = "admin"
 secret_sha256 = "$BEEGIT_ADMIN_SECRET_SHA256"
 
+[limits]
+# 90 MiB instead of the 100 MiB default: the public endpoint runs behind a Cloudflare Tunnel,
+# which rejects request bodies above about 100 MiB (HTTP 413), and one upload request carries a
+# whole blob. The client checks large blobs against this limit before uploading them.
+max_blob_bytes = 94371840
+
 [policy]
 path = "$BEEGIT_POLICY_PATH"
 reload = true

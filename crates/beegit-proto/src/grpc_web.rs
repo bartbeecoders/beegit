@@ -48,6 +48,31 @@ pub(crate) fn is_grpc_web(headers: &HeaderMap) -> bool {
         .is_some_and(|ct| ct.starts_with("application/grpc-web"))
 }
 
+/// The gRPC status for an HTTP error answered by something other than the server (a proxy's
+/// own error page, e.g. Cloudflare's 413 for a request body above its limit), following the
+/// gRPC HTTP-to-status mapping, with RESOURCE_EXHAUSTED for 413.
+pub(crate) fn proxy_status(status: http::StatusCode) -> tonic::Status {
+    use tonic::Code;
+    let code = match status.as_u16() {
+        400 => Code::Internal,
+        401 => Code::Unauthenticated,
+        403 => Code::PermissionDenied,
+        404 => Code::Unimplemented,
+        413 => Code::ResourceExhausted,
+        429 | 502 | 503 | 504 => Code::Unavailable,
+        _ => Code::Unknown,
+    };
+    let hint = if status == http::StatusCode::PAYLOAD_TOO_LARGE {
+        " (the request exceeds a proxy's body size limit, e.g. Cloudflare's ~100 MiB)"
+    } else {
+        ""
+    };
+    tonic::Status::new(
+        code,
+        format!("HTTP {status} from a proxy in front of the server{hint}"),
+    )
+}
+
 pin_project! {
     /// A gRPC-Web response body decoded to plain gRPC data frames plus a trailers frame.
     pub struct WebBody<B> {
@@ -268,6 +293,21 @@ mod tests {
         let wire = frame(0, b"partial message");
         let body = WebBody::new(chunked(&wire[..wire.len() - 3], &[4]));
         assert!(body.collect().await.is_err());
+    }
+
+    #[test]
+    fn proxy_errors_map_to_grpc_codes() {
+        let s = proxy_status(http::StatusCode::PAYLOAD_TOO_LARGE);
+        assert_eq!(s.code(), tonic::Code::ResourceExhausted);
+        assert!(s.message().contains("413"), "{}", s.message());
+        assert_eq!(
+            proxy_status(http::StatusCode::BAD_GATEWAY).code(),
+            tonic::Code::Unavailable
+        );
+        assert_eq!(
+            proxy_status(http::StatusCode::FORBIDDEN).code(),
+            tonic::Code::PermissionDenied
+        );
     }
 
     #[test]

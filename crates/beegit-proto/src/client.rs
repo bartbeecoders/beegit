@@ -90,6 +90,9 @@ fn make_conn(channel: Channel, grpc_web: bool) -> Conn {
         .map_response(|res: http::Response<tonic::body::Body>| {
             if crate::grpc_web::is_grpc_web(res.headers()) {
                 res.map(|b| tonic::body::Body::new(crate::grpc_web::WebBody::new(b)))
+            } else if !res.status().is_success() {
+                // Not the server speaking: turn the proxy's error page into a status.
+                crate::grpc_web::proxy_status(res.status()).into_http()
             } else {
                 res
             }

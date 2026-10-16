@@ -11,7 +11,9 @@ use beegit_proto::{BeeGitClient, error_from_status, v1};
 
 /// Ids per HasObjects request.
 const HAS_BATCH: usize = 1024;
-/// Upload payload bytes per UploadObjects stream.
+/// Upload payload bytes per UploadObjects stream. A batch is sent before a blob would take it
+/// past this size, so one request carries at most this much or a single larger blob: proxies
+/// cap request bodies (Cloudflare at about 100 MiB).
 const UPLOAD_BATCH_BYTES: usize = 32 << 20;
 
 /// A changeset as seen by the caller (SPEC 7.4 GetChangesets; a filtered view when some delta
@@ -138,21 +140,32 @@ pub(crate) async fn upload_blobs(
     let mut batch: Vec<v1::UploadItem> = Vec::new();
     let mut bytes = 0usize;
     for (id, data) in blobs {
-        bytes += data.len();
+        if !batch.is_empty() && bytes.saturating_add(data.len()) > UPLOAD_BATCH_BYTES {
+            send_upload(client, std::mem::take(&mut batch)).await?;
+            bytes = 0;
+        }
+        bytes = bytes.saturating_add(data.len());
         batch.push(v1::UploadItem {
             id: id_bytes(&id),
             kind: u32::from(Kind::Blob.byte()),
             data,
         });
-        if bytes >= UPLOAD_BATCH_BYTES {
-            send_upload(client, std::mem::take(&mut batch)).await?;
-            bytes = 0;
-        }
     }
     if !batch.is_empty() {
         send_upload(client, batch).await?;
     }
     Ok(total)
+}
+
+/// The server's `limits.max_blob_bytes` from GetServerInfo (SPEC 7.3), `None` when unset.
+pub(crate) async fn max_blob_bytes(client: &BeeGitClient) -> Result<Option<u64>> {
+    let info = client
+        .objects()
+        .get_server_info(v1::GetServerInfoRequest {})
+        .await
+        .map_err(|s| error_from_status(&s))?
+        .into_inner();
+    Ok(info.limits.map(|l| l.max_blob_bytes).filter(|&n| n > 0))
 }
 
 async fn send_upload(client: &BeeGitClient, items: Vec<v1::UploadItem>) -> Result<()> {

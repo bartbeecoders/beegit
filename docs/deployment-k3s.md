@@ -70,9 +70,36 @@ On the VPS:
    BeeGit authenticates every call with its own tokens. (A later option is an Access
    service-token header — not supported by the CLI yet.)
 
-Cloudflare limits that apply: a request body may be at most 100 MB on Free/Pro plans, which
-caps a single upload batch (the client batches uploads in 8 MiB batches by default, and
-`limits.max_blob_bytes` is 100 MiB), and responses must start within 100 s.
+### Measured behaviour through the tunnel (B-OPS-3, 2026-10-16)
+
+Run from a home connection against `grpc-web+https://beegit.hideterms.com` on ref `test/b-ops-3`:
+
+| Shape | Result |
+| --- | --- |
+| Commit + land 3,000 small files (12 MB, 3,000 blobs) | OK |
+| Full checkout of those 3,000 files (many-object `GetObjects` streams) | OK, 1.75 s, byte-identical |
+| Sparse checkout of one directory (100 files) | OK, 0.35 s |
+| Upload of one 20 / 90 / 97 MiB blob | OK, 3.1 / 5.1 / 6.4 s |
+| Download (checkout) of the 97 MiB blob | OK, 5.9 s |
+| 200k-line text file: commit, local `diff` (36k lines), server `show` (36k lines), `blame` (200k lines) | OK, 1.4 / 0.6 / 1.3 / 1.6 s |
+| Land of a two-changeset stack | OK, 0.7 s |
+| One upload request of 100 MiB or more | **HTTP 413** from Cloudflare |
+
+So the binding limit is Cloudflare's request body cap of about 100 MiB per request. BeeGit
+stays below it:
+
+- `config/beegit-server.toml` sets `limits.max_blob_bytes = 94371840` (90 MiB) instead of the
+  100 MiB default; one upload request carries one whole blob.
+- The client closes an upload batch before a blob would take it past 32 MiB, so a request
+  holds at most 32 MiB or one blob.
+- Before uploading a blob above 8 MiB, the client checks it against the server's limit and
+  fails with `TOO_LARGE` (limit `max_blob_bytes`) without sending anything.
+- If a proxy still answers with an HTTP error, the client reports it as a gRPC status, e.g.
+  `RESOURCE_EXHAUSTED: HTTP 413 Payload Too Large from a proxy in front of the server …`.
+
+Cloudflare's other limit, 100 s until the response starts, was not approached: the slowest
+call measured was a 97 MiB upload at about 6 s. A single upload over a slow uplink (under
+~1 MB/s for 90 MiB) could hit it.
 
 ## 3. Generate production secrets (once)
 
