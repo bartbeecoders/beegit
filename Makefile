@@ -10,6 +10,7 @@ IMAGE ?= beegit
 TAG ?= $(shell git rev-parse --short HEAD 2>/dev/null || echo dev)
 
 .PHONY: help build release test check check-full fmt secrets dev-backends dev-up dev-down \
+        web-install web-dev web-test web-e2e \
         dev-reset dev-logs run-server smoke image k3s-secrets k3s-deploy k3s-status
 
 help: ## Show this help
@@ -59,6 +60,18 @@ smoke: ## End-to-end smoke test against the running local server
 
 image: ## Build the container image $(IMAGE):$(TAG)
 	$(CONTAINER) build -t $(IMAGE):$(TAG) -t $(IMAGE):latest .
+
+web-install: ## Install the web UI's npm dependencies
+	cd web && npm install --no-audit --no-fund
+
+web-dev: web-install ## Web UI on http://localhost:5173 against the local server (scripts/start.sh)
+	cd web && npm run dev
+
+web-test: ## Web UI type check and unit tests
+	cd web && npm run typecheck && npm test
+
+web-e2e: ## Web UI end-to-end tests against BEEGIT_E2E_URL (default: npm run dev)
+	cd web && npx playwright test
 
 k3s-secrets: ## Generate production secrets into deploy/k3s/state
 	scripts/deploy-k3s.sh secrets

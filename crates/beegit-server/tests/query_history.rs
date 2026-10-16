@@ -20,6 +20,7 @@ async fn get_changesets(
         .await
         .query()
         .get_changesets(v1::GetChangesetsRequest {
+            structured: false,
             ids: ids.iter().map(idb).collect(),
         })
         .await
@@ -116,6 +117,7 @@ async fn get_changesets_filters_unreadable_delta_entries() {
         .await
         .query()
         .get_changesets(v1::GetChangesetsRequest {
+            structured: false,
             ids: vec![idb(&r.c1)],
         })
         .await;

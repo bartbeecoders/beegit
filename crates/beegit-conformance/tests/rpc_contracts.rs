@@ -641,6 +641,7 @@ async fn case_get_changesets(env: &Env, via: Via) {
     let alice = env.client(via, "alice").await;
     let carol = env.client(via, "carol").await;
     let req = v1::GetChangesetsRequest {
+        structured: false,
         ids: vec![idb(&env.c1), idb(&ObjectId::hash_blob(b"no changeset"))],
     };
     // alice cannot read secrets/s.txt: filtered view; carol gets the canonical encoding.
@@ -671,6 +672,7 @@ async fn case_get_changesets(env: &Env, via: Via) {
         alice
             .query()
             .get_changesets(v1::GetChangesetsRequest {
+                structured: false,
                 ids: vec![vec![0xFF; 3]],
             })
             .await,
@@ -824,6 +826,7 @@ async fn case_list_tree(env: &Env, via: Via) {
 
 fn log_req(from: &ObjectId, path: Option<&str>) -> v1::LogRequest {
     v1::LogRequest {
+        structured: false,
         from: idb(from),
         path: path.map(|p| p.as_bytes().to_vec()),
         first_parent_only: false,

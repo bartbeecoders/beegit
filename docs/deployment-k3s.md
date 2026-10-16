@@ -15,8 +15,8 @@ Everything lives in the namespace `beegit`, and one script does the work:
                                                           └─▶ StatefulSet beegit-minio     (PVC 20Gi)
 ```
 
-- **Ports.** BeeGit uses NodePorts from **32100** up: `32100` is gRPC. `32101+` are kept free for
-  later (web UI, git gateway). Nothing else is exposed: CockroachDB, MinIO and the metrics
+- **Ports.** BeeGit uses NodePorts from **32100** up: `32100` is gRPC / gRPC-Web, `32101` is the
+  web UI (`beegit-web`, static nginx), `32102+` are kept free for later (git gateway). Nothing else is exposed: CockroachDB, MinIO and the metrics
   listener are `ClusterIP` only.
 - **Why gRPC-Web.** Plain gRPC reports each call's final status in HTTP/2 *trailers*, and
   Cloudflare Tunnel public hostnames drop trailers: the body arrives but the status does not,
@@ -48,16 +48,25 @@ On the VPS:
 
 ## 2. Cloudflare setup (once)
 
-1. **Ingress rule.** Add to the tunnel configuration (print it with
-   `./scripts/deploy-k3s.sh tunnel`):
+1. **Ingress rules** — two, in this order (print them with `./scripts/deploy-k3s.sh tunnel`).
+   The first sends the API to the server; the second sends everything else (the web UI) to
+   nginx. The CLI only ever requests `/beegit.v1.*`, so it is unaffected by the second rule.
 
    ```yaml
    - hostname: beegit.hideterms.com
+     path: ^/beegit\.v1\.
      service: https://localhost:32100
      originRequest:
        http2Origin: true     # gRPC needs HTTP/2 to the origin
        noTLSVerify: true     # origin cert is signed by BeeGit's private CA
+   - hostname: beegit.hideterms.com
+     service: http://localhost:32101
    ```
+
+   In the dashboard: edit the existing public hostname and set **Path** to `^/beegit\.v1\.`,
+   then add a second public hostname `beegit.hideterms.com` (no path) → `HTTP`
+   `localhost:32101`. Rules are matched top to bottom, so the one with the path must come
+   first.
 
    If cloudflared runs somewhere other than the K3s node, use `https://<node-ip>:32100`.
    For the dashboard-managed tunnel: Public Hostname → Service `HTTPS` `localhost:32100`,
@@ -176,10 +185,24 @@ Give each consumer its own service principal instead of sharing `admin`:
 
 ### GitHub login for people
 
-Register a GitHub OAuth App (Settings → Developer settings → OAuth Apps) with **Device Flow**
-enabled. Set its client id in `deploy/k3s/beegit-server.yaml` (`BEEGIT_GITHUB_CLIENT_ID`), add
-`github:<login>` entries to `acl.toml`, and deploy. `beegit login` then shows a code to enter
-on github.com.
+One GitHub OAuth App serves both the CLI (device flow) and the web UI (web flow):
+
+1. GitHub → Settings → Developer settings → **OAuth Apps** → New OAuth App.
+   - Homepage URL: `https://beegit.hideterms.com`
+   - Authorization callback URL: `https://beegit.hideterms.com/auth/callback`
+   - Tick **Enable Device Flow**.
+2. Generate a client secret. Put both values in `deploy/k3s/state/secrets.env`:
+   ```sh
+   BEEGIT_GITHUB_CLIENT_ID=Ov23li…
+   BEEGIT_GITHUB_CLIENT_SECRET=…
+   ```
+   (`scripts/deploy-k3s.sh secrets` adds these keys once and keeps your values afterwards.)
+3. Add `github:<login>` entries to `deploy/k3s/state/acl.toml`, then `./scripts/deploy-k3s.sh deploy`.
+
+`beegit login` then shows a code to enter on github.com, and the web UI shows **Sign in with
+GitHub**. For local development use a second OAuth App with callback
+`http://localhost:5173/auth/callback` and export the two variables before
+`scripts/start.sh` (GitHub allows one callback host per app).
 
 ## 6. Operations
 

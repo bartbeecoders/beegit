@@ -1,0 +1,9 @@
+# TypeScript messages and service descriptors for the beegit.v1 protocol (protobuf-es v2).
+version: v2
+inputs:
+  - directory: ../proto
+plugins:
+  - local: protoc-gen-es
+    out: src/gen
+    opt: target=ts
+clean: true

@@ -87,6 +87,7 @@ pub(crate) async fn resolve_rev(
 /// verified against `cs`; a filtered view (SPEC 12.6) supplies its `root_tree` field.
 pub(crate) async fn root_tree_of(client: &BeeGitClient, cs: &ObjectId) -> Result<ObjectId> {
     let req = v1::GetChangesetsRequest {
+        structured: false,
         ids: vec![id_bytes(cs)],
     };
     let resp = client

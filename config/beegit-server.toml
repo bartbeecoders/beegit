@@ -24,6 +24,8 @@ path_style = true
 # GitHub OAuth App used for `beegit login` (device flow). Service principals work without it;
 # any placeholder value is fine until you register an OAuth App.
 github_client_id = "$BEEGIT_GITHUB_CLIENT_ID"
+# OAuth App client secret: enables the browser login of the web UI (empty = off).
+github_client_secret = "$BEEGIT_GITHUB_CLIENT_SECRET"
 token_ttl = "12h"
 signing_keys = ["$BEEGIT_SIGNING_KEY"]   # first key signs; all keys verify
 

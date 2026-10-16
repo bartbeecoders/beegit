@@ -567,6 +567,7 @@ impl v1::object_service_server::ObjectService for Svc {
             limits: Some(v1::LimitsMsg::from(&beegit_core::Limits::default())),
             github_client_id: String::new(),
             github_oauth_base_url: String::new(),
+            github_web_login: false,
         }))
     }
 

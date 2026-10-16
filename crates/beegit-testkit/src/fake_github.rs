@@ -10,6 +10,9 @@
 //!   `grant_type`): `{"error":"authorization_pending"}` until [`FakeGitHub::approve_device_code`],
 //!   then `{"access_token","token_type","scope"}` once; afterwards the code is spent
 //!   (`expired_token`). Knobs inject `slow_down`, `expired_token` and `access_denied`.
+//! - The same endpoint with `code` (web flow, amendment B-5): checks the client secret set by
+//!   [`FakeGitHub::set_client_secret`] and the `redirect_uri` of a code registered with
+//!   [`FakeGitHub::add_oauth_code`]; a code works once.
 //!
 //! While [`FakeGitHub::set_down`] is on, every endpoint returns 503.
 
@@ -36,8 +39,17 @@ struct DeviceGrant {
     spent: bool,
 }
 
+struct OAuthCode {
+    code: String,
+    redirect_uri: String,
+    token: String,
+    spent: bool,
+}
+
 #[derive(Default)]
 struct Inner {
+    client_secret: Option<String>,
+    codes: Vec<OAuthCode>,
     down: bool,
     users: BTreeMap<String, (String, u64)>,
     grants: Vec<DeviceGrant>,
@@ -125,6 +137,23 @@ impl FakeGitHub {
             .lock()
             .users
             .insert(token.to_owned(), (login.to_owned(), id));
+    }
+
+    /// The OAuth App client secret the web-flow code exchange must present.
+    pub fn set_client_secret(&self, secret: &str) {
+        self.state.lock().client_secret = Some(secret.to_owned());
+    }
+
+    /// Register a web-flow authorization code: exchanging it (once, with `redirect_uri` and the
+    /// client secret) yields `token`. Register `token` for `GET /user` with
+    /// [`FakeGitHub::add_user`].
+    pub fn add_oauth_code(&self, code: &str, redirect_uri: &str, token: &str) {
+        self.state.lock().codes.push(OAuthCode {
+            code: code.to_owned(),
+            redirect_uri: redirect_uri.to_owned(),
+            token: token.to_owned(),
+            spent: false,
+        });
     }
 
     /// Approve a pending device code, completing the flow with `token`. Unknown codes are
@@ -328,6 +357,26 @@ async fn access_token(State(state): State<Shared>, headers: HeaderMap, body: Byt
     let err = |e: &str| ok_json(json!({ "error": e }));
     if fields.get("client_id").is_none_or(|c| c.is_empty()) {
         return err("unauthorized_client");
+    }
+    if let Some(code) = fields.get("code") {
+        if s.client_secret.is_none() || fields.get("client_secret") != s.client_secret.as_ref() {
+            return err("incorrect_client_credentials");
+        }
+        let Some(c) = s.codes.iter_mut().find(|c| &c.code == code) else {
+            return err("bad_verification_code");
+        };
+        if c.spent {
+            return err("bad_verification_code");
+        }
+        if fields.get("redirect_uri") != Some(&c.redirect_uri) {
+            return err("redirect_uri_mismatch");
+        }
+        c.spent = true;
+        return ok_json(json!({
+            "access_token": c.token,
+            "token_type": "bearer",
+            "scope": "",
+        }));
     }
     if fields.get("grant_type").map(String::as_str)
         != Some("urn:ietf:params:oauth:grant-type:device_code")

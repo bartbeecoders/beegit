@@ -151,6 +151,7 @@ async fn refs_changesets_and_resolve() {
     let items = c
         .query()
         .get_changesets(v1::GetChangesetsRequest {
+            structured: false,
             ids: vec![
                 cs(1).as_bytes().to_vec(),
                 cs(9).as_bytes().to_vec(),

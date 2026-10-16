@@ -16,6 +16,7 @@ export BEEGIT_DB_URL="postgresql://root@localhost:26257/defaultdb?sslmode=disabl
 export BEEGIT_S3_ENDPOINT="http://localhost:9000"
 export BEEGIT_S3_BUCKET="beegit"
 export BEEGIT_GITHUB_CLIENT_ID="${BEEGIT_GITHUB_CLIENT_ID:-not-configured}"
+export BEEGIT_GITHUB_CLIENT_SECRET="${BEEGIT_GITHUB_CLIENT_SECRET:-}"
 export BEEGIT_LOG_FORMAT="text"
 export AWS_ACCESS_KEY_ID="minioadmin"
 export AWS_SECRET_ACCESS_KEY="minioadmin"

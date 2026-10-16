@@ -92,14 +92,17 @@ fn not_found_item(id: &ObjectId) -> v1::ChangesetItem {
 }
 
 /// SPEC 12.6: the full encoding when every delta path is readable, else the filtered view.
+/// `structured` (amendment B-5) always answers with the view; `filtered` then says whether
+/// entries were removed.
 fn changeset_view(
     policy: &Policy,
     p: &Principal,
     cs: &Changeset,
     row: &ChangesetRow,
+    structured: bool,
 ) -> v1::changeset_item::View {
     let all_readable = cs.delta.iter().all(|d| policy.can_read(p, &d.path));
-    if all_readable {
+    if all_readable && !structured {
         return v1::changeset_item::View::Encoded(row.encoded.to_vec());
     }
     let readable: Vec<_> = cs
@@ -114,7 +117,7 @@ fn changeset_view(
         meta: id_bytes(&cs.meta),
         change_id: cs.change_id.0.to_vec(),
         delta: delta_to_proto(&readable),
-        filtered: true,
+        filtered: !all_readable,
     })
 }
 
@@ -141,7 +144,13 @@ pub async fn get_changesets(
             Ok((cs, row)) => items.push(v1::ChangesetItem {
                 id: id_bytes(id),
                 status: v1::ItemStatus::Ok as i32,
-                view: Some(changeset_view(&policy, &c.principal, &cs, &row)),
+                view: Some(changeset_view(
+                    &policy,
+                    &c.principal,
+                    &cs,
+                    &row,
+                    req.get_ref().structured,
+                )),
                 generation: row.generation,
             }),
             Err(e) if e.code == ErrorCode::NotFound => items.push(not_found_item(id)),

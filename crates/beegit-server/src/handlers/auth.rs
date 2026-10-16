@@ -50,6 +50,40 @@ pub async fn login(
                 id: Some(user.id),
             }
         }
+        Some(Credential::GithubOauthCode(c)) => {
+            let auth = &ctx.config.auth;
+            let Some(secret) = auth
+                .github_client_secret
+                .as_deref()
+                .filter(|s| !s.is_empty())
+            else {
+                return Err(to_status(&BeeGitError::new(
+                    beegit_core::ErrorCode::InvalidArgument,
+                    "browser login is not configured on this server (auth.github_client_secret)",
+                )));
+            };
+            if c.code.is_empty() {
+                return Err(to_status(&beegit_proto::convert::missing_field(
+                    "github_oauth_code.code",
+                )));
+            }
+            let token = ctx
+                .github
+                .exchange_code(&beegit_auth::CodeExchange {
+                    oauth_base_url: &auth.github_oauth_base_url,
+                    client_id: &auth.github_client_id,
+                    client_secret: secret,
+                    code: &c.code,
+                    redirect_uri: &c.redirect_uri,
+                })
+                .await
+                .map_status()?;
+            let user = ctx.github.user(&token).await.map_status()?;
+            Principal::GitHub {
+                login: user.login,
+                id: Some(user.id),
+            }
+        }
         Some(Credential::Service(cred)) => {
             if !ctx
                 .services

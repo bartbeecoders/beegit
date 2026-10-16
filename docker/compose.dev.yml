@@ -59,6 +59,7 @@ services:
       BEEGIT_S3_ENDPOINT: http://minio:9000
       BEEGIT_S3_BUCKET: beegit
       BEEGIT_GITHUB_CLIENT_ID: ${BEEGIT_GITHUB_CLIENT_ID:-not-configured}
+      BEEGIT_GITHUB_CLIENT_SECRET: ${BEEGIT_GITHUB_CLIENT_SECRET:-}
       BEEGIT_LOG_FORMAT: text
       BEEGIT_TLS_CERT: /state/tls.crt
       BEEGIT_TLS_KEY: /state/tls.key

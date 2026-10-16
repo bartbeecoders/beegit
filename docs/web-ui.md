@@ -1,6 +1,28 @@
-# BeeGit Web — design
+# BeeGit Web
 
-Status: proposal (plan phase "Web front end", tasks `B-WEB-*` in [plan.html](plan.html)).
+Status: **implemented** (plan phase 3, tasks `B-WEB-*` in [plan.html](plan.html)). Code in
+[`web/`](../web). The design below is kept up to date; "Implementation notes" at the end
+records what changed while building it.
+
+## Using it
+
+```sh
+scripts/start.sh --native        # local server with CockroachDB + MinIO
+make web-dev                     # http://localhost:5173 (proxies /beegit.v1.* to :7443)
+```
+
+Sign in with **GitHub** (when the server has an OAuth App client secret, see
+[deployment-k3s.md](deployment-k3s.md#github-login-for-people)) or with a **BeeGit token**:
+run `beegit login`, then paste the `token` value from `~/.config/beegit/credentials`. The token
+lives only in that browser tab (`sessionStorage`).
+
+Pages: repositories · tree and file view (highlighting, Markdown, images, `#L10-L20` line
+links, permalinks, download) · history per ref or path · changeset with unified/split diff ·
+blame with age shading and "blame before this change" · refs and ref log · compare
+`a...b`. Light/dark follow the OS (toggle in the header), phone widths work.
+
+Tests: `make web-test` (type check + Vitest), `make web-e2e` (Playwright against a running UI;
+see `web/playwright.config.ts` for `BEEGIT_E2E_URL` / `BEEGIT_E2E_TOKEN`).
 
 A browser front end for BeeGit: browse repositories, trees and files, read history, inspect
 changesets and diffs, follow refs, blame a file — the "GitHub repository page" experience,
@@ -131,6 +153,25 @@ Identifiers in URLs are full ids or ref names, so links are stable and shareable
   ACL cases (a restricted subtree, a redacted blob, an anonymous visitor).
 - Through Cloudflare: the same Playwright suite pointed at `beegit.hideterms.com` as a
   post-deploy smoke test.
+
+## Implementation notes
+
+- **No size RPC change needed** (B-WEB-4): tree entries already carry blob sizes
+  (`EntryInfo.size`).
+- **Structured changesets** (amendment B-5): `Log` and `GetChangesets` take `structured`, so
+  the browser gets `FilteredChangeset` views instead of the canonical binary encoding and needs
+  no decoder of its own. The changeset page is one `Log(from = id, limit = 1)` call.
+- **Browser login** is the `Login` RPC with a new `github_oauth_code` credential (no extra HTTP
+  routes): the SPA does GitHub's redirect, the server exchanges the code with
+  `auth.github_client_secret`. `ServerInfo.github_web_login` tells the UI whether to offer it.
+- **HTTP/1.1** is accepted for gRPC-Web (`accept_http1`), so the Vite dev proxy works.
+- **Error details:** BeeGit sends its `ErrorDetail` in `grpc-status-details-bin`, which
+  Connect-ES tries to decode as `google.rpc.Status` (failing with DataLoss). `web/src/api/fetch.ts`
+  renames the key to `beegit-error-detail-bin`; the UI decodes BeeGit's code from there and
+  shows redactions, missing access and missing paths as states rather than errors.
+- **CSP** allows `'wasm-unsafe-eval'`: Shiki's highlighter runs WebAssembly.
+- Not done yet: word-level diff highlights, virtualized very large directories, a tunnel-side
+  rate limit for the static assets. Ideas B-WEB-16..19 remain open.
 
 ## Open questions
 

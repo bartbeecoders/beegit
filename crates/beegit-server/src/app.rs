@@ -470,8 +470,12 @@ impl ServerApp {
         let addr = listener
             .local_addr()
             .map_err(|e| io_err("listener address", e))?;
+        // HTTP/1.1 is accepted for gRPC-Web only (tonic-web answers other HTTP/1 requests with
+        // 400): browsers' dev proxies and proxies without HTTP/2 to the origin speak it
+        // (B-WEB-3). TLS still offers only `h2` by ALPN; clients without ALPN get HTTP/1.1.
         let builder = match &tls {
             Some((cert, key)) => tonic::transport::Server::builder()
+                .accept_http1(true)
                 .tls_config(crate::tls::tonic_config(cert, key)?)
                 .map_err(|e| {
                     BeeGitError::new(
@@ -479,7 +483,7 @@ impl ServerApp {
                         format!("TLS configuration: {e}"),
                     )
                 })?,
-            None => tonic::transport::Server::builder(),
+            None => tonic::transport::Server::builder().accept_http1(true),
         };
         let router = self.build_router(builder);
 

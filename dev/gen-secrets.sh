@@ -4,7 +4,9 @@
 #   - an Ed25519 token-signing key (signing.ed25519.pem, PKCS#8 PEM)
 #   - a random secret for the `admin` service principal (admin.secret) and its SHA-256
 #   - an access policy (acl.toml) granting `service:admin` full access
-#   - secrets.env with the values the server config reads through `$NAME`
+#   - secrets.env with the values the server config reads through `$NAME`: the admin secret
+#     hash (always rewritten) plus BEEGIT_GITHUB_CLIENT_ID / BEEGIT_GITHUB_CLIENT_SECRET for
+#     GitHub login (added once; edit them in place, later runs keep your values)
 #   - s3.env with random object-store credentials (used by the K3s MinIO)
 #
 #   dev/gen-secrets.sh [OUT_DIR]          default OUT_DIR: dev/state
@@ -105,9 +107,20 @@ if fresh "$OUT/s3.env"; then
 fi
 
 # ---- env file for the server config ------------------------------------------------------------
-cat > "$OUT/secrets.env" <<EOF
-BEEGIT_ADMIN_SECRET_SHA256=$ADMIN_SHA256
-EOF
+touch "$OUT/secrets.env"
+set_env() { # KEY VALUE: replace the line for KEY
+  grep -v "^$1=" "$OUT/secrets.env" > "$OUT/secrets.env.tmp" || true
+  printf '%s=%s\n' "$1" "$2" >> "$OUT/secrets.env.tmp"
+  mv "$OUT/secrets.env.tmp" "$OUT/secrets.env"
+}
+default_env() { # KEY VALUE: add KEY only when missing
+  grep -q "^$1=" "$OUT/secrets.env" || printf '%s=%s\n' "$1" "$2" >> "$OUT/secrets.env"
+}
+set_env BEEGIT_ADMIN_SECRET_SHA256 "$ADMIN_SHA256"
+# GitHub OAuth App (device flow for the CLI, web flow for the browser UI). Empty secret =
+# browser login off.
+default_env BEEGIT_GITHUB_CLIENT_ID not-configured
+default_env BEEGIT_GITHUB_CLIENT_SECRET ""
 chmod 600 "$OUT"/*.key "$OUT"/*.pem "$OUT/admin.secret" "$OUT/secrets.env" "$OUT/s3.env" 2>/dev/null || true
 # The container runs as a non-root user and reads these through a bind mount.
 chmod 644 "$OUT/ca.pem" "$OUT/tls.crt" "$OUT/acl.toml"

@@ -10,7 +10,7 @@ mod secret;
 mod service;
 mod token;
 
-pub use github::{GitHubClient, GitHubUser};
+pub use github::{CodeExchange, GitHubClient, GitHubUser};
 #[cfg(feature = "test-hooks")]
 pub use secret::ct_eq_calls;
 pub use secret::{Secret, ct_eq};

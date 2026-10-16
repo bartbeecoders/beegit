@@ -13,12 +13,15 @@ set -euo pipefail
 #                       (tunnel config managed outside this repo). Clients use
 #                       grpc-web+https://beegit.hideterms.com, because the tunnel
 #                       drops the HTTP/2 trailers that plain gRPC relies on.
+#   • beegit-web        Static web UI (nginx). NodePort 32101 — the tunnel sends every
+#                       path except /beegit.v1.* here (same hostname, no CORS).
 #   • beegit-cockroach  CockroachDB, single node, metadata (PVC 10Gi). ClusterIP only.
 #   • beegit-minio      MinIO, object bytes (PVC 20Gi). ClusterIP only.
 #
 #   Ports 32100 and up are reserved for BeeGit on the VPS:
-#     32100  gRPC (beegit CLI, daemon, importer)
-#     32101+ free for later (web UI, git gateway)
+#     32100  gRPC / gRPC-Web (beegit CLI, daemon, importer, web UI API calls)
+#     32101  web UI (static files)
+#     32102+ free for later (git gateway)
 #
 # Registry:  beecodersregistry.azurecr.io  (reuses the existing acr-secret
 #            ImagePullSecret — copied into this namespace on first deploy).
@@ -59,6 +62,8 @@ COMMAND="${1:-all}"
 REGISTRY="${REGISTRY:-beecodersregistry.azurecr.io}"
 NAMESPACE="beegit"
 IMAGE="$REGISTRY/beegit"
+WEB_IMAGE="$REGISTRY/beegit-web"
+WEB_NODE_PORT=32101
 NODE_PORT=32100
 PUBLIC_HOST="${PUBLIC_HOST:-beegit.hideterms.com}"
 # Cloudflare Tunnel public hostnames drop HTTP/2 trailers, which plain gRPC needs for its
@@ -146,6 +151,14 @@ build_image() {
     -t "$IMAGE:$APP_VERSION" \
     -f "$ROOT_DIR/Dockerfile" \
     "$ROOT_DIR"
+
+  echo "==> Building $WEB_IMAGE:$APP_VERSION"
+  podman build \
+    --pull=newer \
+    -t "$WEB_IMAGE:latest" \
+    -t "$WEB_IMAGE:$APP_VERSION" \
+    -f "$ROOT_DIR/web/Dockerfile" \
+    "$ROOT_DIR"
   mkdir -p "$(dirname "$VERSION_FILE")"
   echo "$APP_VERSION" > "$VERSION_FILE"
 }
@@ -161,6 +174,10 @@ push_image() {
   echo "==> Pushing $IMAGE"
   podman push "$IMAGE:$APP_VERSION"
   podman push "$IMAGE:latest"
+
+  echo "==> Pushing $WEB_IMAGE"
+  podman push "$WEB_IMAGE:$APP_VERSION"
+  podman push "$WEB_IMAGE:latest"
 }
 
 # -----------------------------------------------------------------------------
@@ -208,6 +225,7 @@ ensure_acr_secret() {
 }
 
 deploy_manifests() {
+  ensure_secrets   # idempotent; adds env keys introduced by newer versions
   need_state
   echo "==> Deploying BeeGit $APP_VERSION to $VPS_USER@$VPS_IP (namespace: $NAMESPACE)"
 
@@ -230,11 +248,13 @@ deploy_manifests() {
   kubectl_vps "-n $NAMESPACE rollout status statefulset/beegit-cockroach --timeout=300s"
   kubectl_vps "-n $NAMESPACE rollout status statefulset/beegit-minio --timeout=300s"
   kubectl_vps "-n $NAMESPACE rollout status deployment/beegit-server --timeout=300s"
+  kubectl_vps "-n $NAMESPACE rollout status deployment/beegit-web --timeout=300s"
 
   echo ""
   echo "Deployed BeeGit $APP_VERSION"
   echo "  • gRPC (origin):  https://$VPS_IP:$NODE_PORT  (private CA: deploy/k3s/state/ca.pem)"
-  echo "  • Public:         $PUBLIC_ENDPOINT  (via Cloudflare Tunnel)"
+  echo "  • Public API:     $PUBLIC_ENDPOINT  (via Cloudflare Tunnel)"
+  echo "  • Web UI:         https://$PUBLIC_HOST/  (origin http://$VPS_IP:$WEB_NODE_PORT)"
   echo ""
   tunnel_info
   echo "  Log in:  ./scripts/deploy-k3s.sh login"
@@ -243,12 +263,15 @@ deploy_manifests() {
 
 tunnel_info() {
   cat <<EOF
-  Cloudflare Tunnel — ingress rule for the tunnel config (cloudflared on the VPS):
+  Cloudflare Tunnel — two ingress rules, in this order (cloudflared on the VPS):
     - hostname: $PUBLIC_HOST
+      path: ^/beegit\.v1\.          # API calls (CLI, daemon, importer, web UI)
       service: https://localhost:$NODE_PORT
       originRequest:
         http2Origin: true     # gRPC needs HTTP/2 to the origin
         noTLSVerify: true     # origin cert is signed by BeeGit's private CA
+    - hostname: $PUBLIC_HOST            # everything else: the web UI
+      service: http://localhost:$WEB_NODE_PORT
   Dashboard: enable gRPC for the zone (Network → gRPC), and keep Cloudflare Access
   off this hostname — the beegit CLI authenticates with its own tokens.
 

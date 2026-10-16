@@ -52,6 +52,7 @@ async fn get_changesets_contract() {
         .root_tree;
     let resp = a
         .get_changesets(v1::GetChangesetsRequest {
+            structured: false,
             ids: vec![idb(&r.c3), idb(&missing_cs()), idb(&tree), idb(&r.root)],
         })
         .await
@@ -68,13 +69,17 @@ async fn get_changesets_contract() {
     assert_eq!(items[0].generation, 4);
     // Empty batch.
     let resp = a
-        .get_changesets(v1::GetChangesetsRequest { ids: vec![] })
+        .get_changesets(v1::GetChangesetsRequest {
+            structured: false,
+            ids: vec![],
+        })
         .await
         .unwrap();
     assert!(resp.into_inner().items.is_empty());
     // Malformed id.
     let e = a
         .get_changesets(v1::GetChangesetsRequest {
+            structured: false,
             ids: vec![vec![1, 2, 3]],
         })
         .await;
@@ -83,6 +88,7 @@ async fn get_changesets_contract() {
         Some(subcode::BAD_ID_TEXT)
     );
     let req = || v1::GetChangesetsRequest {
+        structured: false,
         ids: vec![idb(&r.c1)],
     };
     expect_code(

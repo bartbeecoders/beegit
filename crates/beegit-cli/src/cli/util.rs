@@ -127,6 +127,7 @@ pub(crate) async fn fetch_cs(client: &BeeGitClient, id: &ObjectId) -> BeeGitResu
     let r = client
         .query()
         .get_changesets(v1::GetChangesetsRequest {
+            structured: false,
             ids: vec![id.as_bytes().to_vec()],
         })
         .await

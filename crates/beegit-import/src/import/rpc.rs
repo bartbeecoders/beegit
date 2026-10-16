@@ -198,6 +198,7 @@ impl Rpc<'_> {
     pub async fn changeset_encoding(&self, id: &ObjectId) -> Result<Option<Vec<u8>>> {
         let c = self.client;
         let req = v1::GetChangesetsRequest {
+            structured: false,
             ids: vec![id_bytes(id)],
         };
         let resp = retry("GetChangesets", true, || {

@@ -105,7 +105,7 @@ pub async fn log(
     };
     let mut entries = Vec::with_capacity(ids.len());
     for id in &ids {
-        entries.push(log_entry(ctx, &policy, &who, id).await?);
+        entries.push(log_entry(ctx, &policy, &who, id, r.structured).await?);
     }
     Ok(Response::new(v1::LogResponse {
         entries,
@@ -119,9 +119,10 @@ async fn log_entry(
     policy: &Policy,
     who: &Principal,
     id: &ObjectId,
+    structured: bool,
 ) -> Result<v1::LogEntry, Status> {
     let (cs, row) = ctx.objects.get_changeset(id).await.map_status()?;
-    let item = changeset_item(policy, who, id, &cs, &row);
+    let item = changeset_item(policy, who, id, &cs, &row, structured);
     let meta = meta_view(ctx, &cs.meta).await?;
     Ok(v1::LogEntry {
         id: id_bytes(id),
@@ -131,20 +132,24 @@ async fn log_entry(
 }
 
 /// SPEC 12.6: the full canonical encoding when every delta path is readable by `who`, else a
-/// filtered view without the unreadable delta entries (`filtered = true`).
+/// filtered view without the unreadable delta entries (`filtered = true`). `structured`
+/// (amendment B-5) always answers with the view (`filtered` says whether entries were
+/// removed).
 pub fn changeset_item(
     policy: &Policy,
     who: &Principal,
     id: &ObjectId,
     cs: &Changeset,
     row: &ChangesetRow,
+    structured: bool,
 ) -> v1::ChangesetItem {
     let readable: Vec<&DeltaEntry> = cs
         .delta
         .iter()
         .filter(|e| policy.can_read(who, &e.path))
         .collect();
-    let view = if readable.len() == cs.delta.len() {
+    let all_readable = readable.len() == cs.delta.len();
+    let view = if all_readable && !structured {
         v1::changeset_item::View::Encoded(row.encoded.to_vec())
     } else {
         let kept: Vec<DeltaEntry> = readable.into_iter().cloned().collect();
@@ -154,7 +159,7 @@ pub fn changeset_item(
             meta: id_bytes(&cs.meta),
             change_id: change_id_bytes(&cs.change_id),
             delta: delta_to_proto(&kept),
-            filtered: true,
+            filtered: !all_readable,
         })
     };
     v1::ChangesetItem {

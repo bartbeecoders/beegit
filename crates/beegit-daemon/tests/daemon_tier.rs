@@ -171,6 +171,7 @@ async fn query_and_auth_calls_are_forwarded_byte_identically() {
         (
             upstream_methods::GET_CHANGESETS,
             v1::GetChangesetsRequest {
+                structured: false,
                 ids: vec![cs.as_bytes().to_vec(), missing_id(3).as_bytes().to_vec()],
             }
             .encode_to_vec(),

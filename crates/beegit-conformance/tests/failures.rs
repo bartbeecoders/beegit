@@ -1068,7 +1068,10 @@ async fn external_class_8_client_crash_mid_operation() {
 async fn can_read(client: &BeeGitClient, cs: &ObjectId) -> Result<(), tonic::Status> {
     client
         .query()
-        .get_changesets(v1::GetChangesetsRequest { ids: vec![idb(cs)] })
+        .get_changesets(v1::GetChangesetsRequest {
+            structured: false,
+            ids: vec![idb(cs)],
+        })
         .await
         .map(|_| ())
 }

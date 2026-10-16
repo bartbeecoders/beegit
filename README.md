@@ -46,6 +46,9 @@ scripts/start.sh --status | --logs | --stop | --reset
 
 (The `make dev-up`, `make run-server` and `make smoke` targets do the same steps individually.)
 
+Web UI: `make web-dev` → http://localhost:5173 (sign in with a token from
+`~/.config/beegit/credentials`; see [docs/web-ui.md](docs/web-ui.md)).
+
 Then use the CLI yourself:
 
 ```sh
@@ -73,7 +76,8 @@ beegit-import --git /path/to/repo --ref HEAD --target-ref main --skip-submodules
 ## Deploy to the K3s VPS
 
 Public endpoint: **`grpc-web+https://beegit.hideterms.com`** (Cloudflare Tunnel → NodePort 32100;
-gRPC-Web because the tunnel drops the HTTP/2 trailers plain gRPC needs).
+gRPC-Web because the tunnel drops the HTTP/2 trailers plain gRPC needs). The **web UI** is
+served on the same hostname: **https://beegit.hideterms.com** (NodePort 32101).
 
 ```sh
 ./scripts/deploy-k3s.sh secrets   # once: origin TLS, signing key, admin secret, S3 creds
@@ -111,6 +115,7 @@ More: [docs/architecture.md](docs/architecture.md) and the full [SPEC.md](SPEC.m
 | `scripts/` | `start.sh` (local stack), `deploy-k3s.sh` (VPS), checks, benchmarks, `rebrand-upstream.sh` |
 | `dev/` | Local tooling: `gen-secrets.sh`, `env.sh`, `smoke.sh` (state goes to `dev/state/`, git-ignored) |
 | `docker/` | `compose.dev.yml` (local stack), `compose.test.yml` (external-backend tests) |
+| `web/` | Web UI: React + TypeScript + Vite, Connect-ES gRPC-Web clients ([docs/web-ui.md](docs/web-ui.md)) |
 | `deploy/k3s/` | Kustomize manifests for the VPS (applied by `scripts/deploy-k3s.sh`) |
 | `Dockerfile` | One image with `beegit-server`, `beegit`, `beegit-daemon`, `beegit-import` |
 | `docs/` | Guides, contracts, the [plan](docs/plan.html), [upstream benchmarks](docs/upstream/benchmarks.md) |
@@ -147,7 +152,7 @@ publishes them, their `.sha256` files and `install.sh` as a GitHub release.
 | [Implementation-defined behaviour](docs/implementation-defined.md) | Choices the SPEC leaves open |
 | [Amendments](docs/contracts/amendments.md) | Every deviation from the frozen plan, incl. the fork (B-1) |
 | [Backup & retention](docs/operations/backup-retention.md) | Operational contract for backups |
-| [Web front end (design)](docs/web-ui.md) | Browser UI for repos, files, history, diffs, blame |
+| [Web UI](docs/web-ui.md) | Browser UI for repos, files, history, diffs, blame: usage and design |
 | [Git gateway (draft)](docs/git-gateway.md) | Design for serving unmodified git clients |
 
 ## License

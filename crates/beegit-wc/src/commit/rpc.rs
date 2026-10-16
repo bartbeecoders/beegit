@@ -35,6 +35,7 @@ fn upstream(msg: &str) -> BeeGitError {
 /// GetChangesets for one id; a full encoding is verified against `id`.
 pub(crate) async fn fetch_changeset(client: &BeeGitClient, id: &ObjectId) -> Result<CsInfo> {
     let req = v1::GetChangesetsRequest {
+        structured: false,
         ids: vec![id_bytes(id)],
     };
     let resp = client

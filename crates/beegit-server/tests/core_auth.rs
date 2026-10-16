@@ -273,3 +273,94 @@ async fn key_rotation_through_config() {
     assert_eq!(err.code(), tonic::Code::Unauthenticated);
     assert!(who_am_i(&srv, &srv.token_for(&alice())).await.is_ok());
 }
+
+/// Browser login (amendment B-5): `Login` with a GitHub web-flow code is exchanged with the
+/// client secret, then resolved through `/user` like a device-flow token.
+#[tokio::test(flavor = "multi_thread")]
+async fn github_web_code_login_against_fake_github() {
+    let gh = FakeGitHub::start().await;
+    gh.set_client_secret("s3cret");
+    gh.add_user("gho_web", "alice", 4242);
+    let redirect = "https://beegit.example/auth/callback";
+    gh.add_oauth_code("code-1", redirect, "gho_web");
+    gh.add_oauth_code("code-2", redirect, "gho_web");
+    let base = gh.oauth_base();
+    let srv = InProcessServer::start(ServerTestOpts {
+        github_api_url: Some(gh.api_url()),
+        tweak: Some(Arc::new(move |c| {
+            c.auth.github_oauth_base_url = base.clone();
+            c.auth.github_client_secret = Some("s3cret".into());
+        })),
+        ..opts()
+    })
+    .await;
+    let client = srv.client(None).await;
+    let info = client
+        .objects()
+        .get_server_info(v1::GetServerInfoRequest {})
+        .await
+        .unwrap()
+        .into_inner();
+    assert!(info.github_web_login);
+
+    let login = |code: &str, uri: &str| v1::LoginRequest {
+        credential: Some(v1::login_request::Credential::GithubOauthCode(
+            v1::GitHubOAuthCode {
+                code: code.into(),
+                redirect_uri: uri.into(),
+            },
+        )),
+    };
+    let resp = client
+        .auth()
+        .login(login("code-1", redirect))
+        .await
+        .unwrap()
+        .into_inner();
+    assert_eq!(resp.principal, "github:alice");
+    assert_eq!(verify(&srv, &resp.token).gid, Some(4242));
+
+    // A spent code, an unknown code and a different redirect URI are UNAUTHENTICATED.
+    for (code, uri) in [
+        ("code-1", redirect),
+        ("nope", redirect),
+        ("code-2", "https://evil.example/cb"),
+    ] {
+        let err = client.auth().login(login(code, uri)).await.unwrap_err();
+        assert_eq!(err.code(), tonic::Code::Unauthenticated, "{code} {uri}");
+    }
+    let err = client.auth().login(login("", redirect)).await.unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+}
+
+/// Without `auth.github_client_secret` the server advertises no web login and refuses codes.
+#[tokio::test(flavor = "multi_thread")]
+async fn github_web_code_login_is_off_without_a_client_secret() {
+    let srv = InProcessServer::start(opts()).await;
+    let client = srv.client(None).await;
+    let info = client
+        .objects()
+        .get_server_info(v1::GetServerInfoRequest {})
+        .await
+        .unwrap()
+        .into_inner();
+    assert!(!info.github_web_login);
+    let err = client
+        .auth()
+        .login(v1::LoginRequest {
+            credential: Some(v1::login_request::Credential::GithubOauthCode(
+                v1::GitHubOAuthCode {
+                    code: "c".into(),
+                    redirect_uri: "https://x/cb".into(),
+                },
+            )),
+        })
+        .await
+        .unwrap_err();
+    assert_eq!(err.code(), tonic::Code::InvalidArgument);
+    assert!(
+        err.message().contains("not configured"),
+        "{}",
+        err.message()
+    );
+}

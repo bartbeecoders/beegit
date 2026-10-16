@@ -125,3 +125,102 @@ async fn grpc_web_response_carries_status_and_epochs_in_the_body() {
     assert!(block.contains("beegit-tier:server"), "{block}");
     assert!(block.contains("beegit-policy-epoch:"), "{block}");
 }
+
+/// gRPC-Web over HTTP/1.1 (B-WEB-3): a TLS client without ALPN (Node's https agent, used by
+/// the Vite dev proxy) gets HTTP/1.1 and a normal gRPC-Web answer.
+#[tokio::test(flavor = "multi_thread")]
+async fn grpc_web_works_over_http1_without_alpn() {
+    let srv = InProcessServer::start(opts()).await;
+    let ca = srv.tls.as_ref().unwrap().ca_pem.clone().unwrap();
+    let mut roots = rustls::RootCertStore::empty();
+    for c in rustls_pemfile::certs(&mut ca.as_slice()) {
+        roots.add(c.unwrap()).unwrap();
+    }
+    let provider = std::sync::Arc::new(rustls::crypto::ring::default_provider());
+    let cfg = rustls::ClientConfig::builder_with_provider(provider)
+        .with_safe_default_protocol_versions()
+        .unwrap()
+        .with_root_certificates(roots)
+        .with_no_client_auth(); // no ALPN
+    let tcp = tokio::net::TcpStream::connect(srv.addr).await.unwrap();
+    let name = rustls::pki_types::ServerName::try_from("127.0.0.1").unwrap();
+    let tls = tokio_rustls::TlsConnector::from(std::sync::Arc::new(cfg))
+        .connect(name, tcp)
+        .await
+        .unwrap();
+    let (mut send, conn) = hyper::client::conn::http1::handshake(hyper_util::rt::TokioIo::new(tls))
+        .await
+        .unwrap();
+    tokio::spawn(conn);
+    let req = http::Request::builder()
+        .method(http::Method::POST)
+        .uri("/beegit.v1.AuthService/WhoAmI")
+        .header("host", "127.0.0.1")
+        .header("content-type", "application/grpc-web+proto")
+        .header("x-grpc-web", "1")
+        .header(
+            "authorization",
+            format!("Bearer {}", srv.token_for(&alice())),
+        )
+        .body(http_body_util::Full::new(bytes::Bytes::from_static(&[
+            0, 0, 0, 0, 0,
+        ])))
+        .unwrap();
+    let resp = send.send_request(req).await.unwrap();
+    assert_eq!(resp.version(), http::Version::HTTP_11);
+    assert_eq!(resp.status(), http::StatusCode::OK);
+    let body = resp.into_body().collect().await.unwrap().to_bytes();
+    let text = String::from_utf8_lossy(&body).to_lowercase();
+    assert!(text.contains("grpc-status:0"), "{text}");
+    assert!(text.contains("github:alice"), "{text}");
+}
+
+/// `structured` (amendment B-5): Log and GetChangesets answer with the structured view, so
+/// the web UI needs no canonical-encoding decoder; without it the encoding is unchanged.
+#[tokio::test(flavor = "multi_thread")]
+async fn structured_changeset_views() {
+    let srv = InProcessServer::start(opts()).await;
+    let c = srv.client(Some(&alice())).await;
+    let main = c
+        .objects()
+        .resolve_ref(v1::ResolveRefRequest {
+            name: "main".into(),
+            at_version: None,
+        })
+        .await
+        .unwrap()
+        .into_inner()
+        .target;
+    let log = |structured| v1::LogRequest {
+        from: main.clone(),
+        path: None,
+        first_parent_only: false,
+        limit: 1,
+        page_token: Vec::new(),
+        structured,
+    };
+    use v1::changeset_item::View;
+    let plain = c.query().log(log(false)).await.unwrap().into_inner();
+    assert!(matches!(
+        plain.entries[0].changeset.as_ref().unwrap().view,
+        Some(View::Encoded(_))
+    ));
+    let s = c.query().log(log(true)).await.unwrap().into_inner();
+    let Some(View::FilteredView(v)) = &s.entries[0].changeset.as_ref().unwrap().view else {
+        panic!("structured log entry")
+    };
+    assert!(!v.filtered, "nothing was removed");
+    assert!(!v.root_tree.is_empty() && !v.meta.is_empty());
+    assert!(s.entries[0].meta.is_some());
+
+    let g = c
+        .query()
+        .get_changesets(v1::GetChangesetsRequest {
+            ids: vec![main.clone()],
+            structured: true,
+        })
+        .await
+        .unwrap()
+        .into_inner();
+    assert!(matches!(g.items[0].view, Some(View::FilteredView(_))));
+}

@@ -31,5 +31,9 @@ pub async fn get_server_info(
         limits: Some(v1::LimitsMsg::from(&ctx.config.limits)),
         github_client_id: auth.github_client_id.clone(),
         github_oauth_base_url: auth.github_oauth_base_url.clone(),
+        github_web_login: auth
+            .github_client_secret
+            .as_deref()
+            .is_some_and(|s| !s.is_empty()),
     }))
 }

@@ -112,6 +112,10 @@ pub struct AuthSection {
     /// (+) GitHub OAuth base URL (default `https://github.com`).
     #[serde(default = "default_github_oauth_base_url")]
     pub github_oauth_base_url: String,
+    /// (+) GitHub OAuth App client secret for the browser login (`Login` with
+    /// `github_oauth_code`, amendment B-5). Absent or empty: web login is off.
+    #[serde(default)]
+    pub github_client_secret: Option<String>,
     /// Token TTL (default 12h), humantime syntax.
     #[serde(default = "default_token_ttl", with = "humantime_serde")]
     pub token_ttl: Duration,
@@ -443,6 +447,7 @@ impl ServerConfig {
                 github_client_id: "beegit-test-client".to_string(),
                 github_api_url: default_github_api_url(),
                 github_oauth_base_url: default_github_oauth_base_url(),
+                github_client_secret: None,
                 token_ttl: default_token_ttl(),
                 signing_keys: vec![dir.join("signing.ed25519.pem")],
                 service_principals: Vec::new(),

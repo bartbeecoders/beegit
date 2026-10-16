@@ -394,6 +394,7 @@ impl<'a> BeeGitReader<'a> {
             .client
             .query()
             .get_changesets(v1::GetChangesetsRequest {
+                structured: false,
                 ids: vec![id_bytes(id)],
             })
             .await

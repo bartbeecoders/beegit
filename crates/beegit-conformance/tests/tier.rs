@@ -174,6 +174,7 @@ async fn setup_read_fixture(c: &TestCluster) -> Fixture {
     let log = admin
         .query()
         .log(v1::LogRequest {
+            structured: false,
             from: c1.as_bytes().to_vec(),
             path: None,
             first_parent_only: true,
@@ -780,6 +781,7 @@ async fn non_object_transcript(c: &TestCluster, via: Via) -> Vec<String> {
     let r = alice
         .query()
         .get_changesets(v1::GetChangesetsRequest {
+            structured: false,
             ids: vec![
                 main.as_bytes().to_vec(),
                 ObjectId::hash_blob(b"x").as_bytes().to_vec(),
@@ -820,6 +822,7 @@ async fn non_object_transcript(c: &TestCluster, via: Via) -> Vec<String> {
     let r = alice
         .query()
         .log(v1::LogRequest {
+            structured: false,
             from: main.as_bytes().to_vec(),
             path: None,
             first_parent_only: false,
@@ -1296,6 +1299,7 @@ async fn run_multi_server(backend: Backend) {
     let r = s1
         .query()
         .get_changesets(v1::GetChangesetsRequest {
+            structured: false,
             ids: vec![cs.as_bytes().to_vec()],
         })
         .await
@@ -1332,6 +1336,7 @@ async fn run_multi_server(backend: Backend) {
         let e = s
             .query()
             .get_changesets(v1::GetChangesetsRequest {
+                structured: false,
                 ids: vec![cs.as_bytes().to_vec()],
             })
             .await

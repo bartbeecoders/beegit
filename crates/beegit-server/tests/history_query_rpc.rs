@@ -174,6 +174,7 @@ async fn seed(srv: &InProcessServer) -> Seeded {
 
 fn log_req(from: &ObjectId, path: Option<&str>, limit: u32, token: Vec<u8>) -> v1::LogRequest {
     v1::LogRequest {
+        structured: false,
         from: idb(from),
         path: path.map(|s| s.as_bytes().to_vec()),
         first_parent_only: false,

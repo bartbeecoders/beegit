@@ -67,7 +67,6 @@ spec:
             - { name: BEEGIT_DB_URL, value: "postgresql://root@beegit-cockroach:26257/defaultdb?sslmode=disable" }
             - { name: BEEGIT_S3_ENDPOINT, value: "http://beegit-minio:9000" }
             - { name: BEEGIT_S3_BUCKET, value: beegit }
-            - { name: BEEGIT_GITHUB_CLIENT_ID, value: not-configured }
             - { name: AWS_REGION, value: us-east-1 }
           ports:
             - { containerPort: 7443, name: grpc }

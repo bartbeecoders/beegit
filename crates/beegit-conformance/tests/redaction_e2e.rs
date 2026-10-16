@@ -147,6 +147,7 @@ async fn changesets(client: &BeeGitClient, ids: &[ObjectId]) -> Vec<v1::Changese
     client
         .query()
         .get_changesets(v1::GetChangesetsRequest {
+            structured: false,
             ids: ids.iter().map(idb).collect(),
         })
         .await
@@ -415,6 +416,7 @@ async fn run_runbook(backend: Backend) {
             alice
                 .query()
                 .log(v1::LogRequest {
+                    structured: false,
                     from: idb(&from),
                     path: None,
                     first_parent_only: true,

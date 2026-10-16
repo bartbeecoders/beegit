@@ -517,6 +517,7 @@ async fn soak(client: BeeGitClient, a: SoakArgs) -> Result<Value> {
         let r = client
             .query()
             .log(v1::LogRequest {
+                structured: false,
                 from: tip.as_bytes().to_vec(),
                 path: None,
                 first_parent_only: true,

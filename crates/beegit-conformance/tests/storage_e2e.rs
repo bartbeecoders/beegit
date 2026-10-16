@@ -564,6 +564,7 @@ async fn run_stale_read_retry(backend: Backend) {
     let items = alice
         .query()
         .get_changesets(v1::GetChangesetsRequest {
+            structured: false,
             ids: vec![idb(&cs)],
         })
         .await
@@ -608,6 +609,7 @@ async fn run_stale_read_retry(backend: Backend) {
     let items = alice
         .query()
         .get_changesets(v1::GetChangesetsRequest {
+            structured: false,
             ids: vec![idb(&absent_cs)],
         })
         .await

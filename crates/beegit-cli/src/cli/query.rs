@@ -53,6 +53,7 @@ pub(crate) async fn log_page(
     client
         .query()
         .log(v1::LogRequest {
+            structured: false,
             from: from.as_bytes().to_vec(),
             path: path.map(|p| p.as_bytes().to_vec()),
             first_parent_only: first_parent,

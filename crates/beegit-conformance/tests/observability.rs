@@ -218,6 +218,7 @@ async fn workload(c: &TestCluster, n: &mut Needles) {
                 let _ = cl
                     .query()
                     .log(v1::LogRequest {
+                        structured: false,
                         from: idb(&cs),
                         path: Some(path.as_bytes().to_vec()),
                         first_parent_only: false,
@@ -249,6 +250,7 @@ async fn workload(c: &TestCluster, n: &mut Needles) {
             let _ = cl
                 .query()
                 .get_changesets(v1::GetChangesetsRequest {
+                    structured: false,
                     ids: vec![idb(&cs)],
                 })
                 .await;

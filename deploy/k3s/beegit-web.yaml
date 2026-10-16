@@ -1,0 +1,47 @@
+# beegit-web: the static web UI (nginx, B-WEB-13) on NodePort 32101. The Cloudflare Tunnel
+# routes https://beegit.hideterms.com/beegit.v1.* to beegit-server (32100) and every other
+# path here, so the browser talks to one origin.
+apiVersion: v1
+kind: Service
+metadata:
+  name: beegit-web
+  labels: { app: beegit-web }
+spec:
+  type: NodePort
+  selector: { app: beegit-web }
+  ports:
+    - { name: http, port: 8080, targetPort: 8080, nodePort: 32101 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beegit-web
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: beegit-web }
+  template:
+    metadata:
+      labels: { app: beegit-web }
+    spec:
+      imagePullSecrets:
+        - name: acr-secret
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+      containers:
+        - name: web
+          image: beegit-web
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { containerPort: 8080, name: http }
+          readinessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /healthz, port: 8080 }
+            initialDelaySeconds: 5
+            periodSeconds: 20
+          resources:
+            requests: { cpu: 10m, memory: 16Mi }
+            limits: { memory: 64Mi }

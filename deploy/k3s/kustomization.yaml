@@ -12,11 +12,15 @@ resources:
   - cockroach.yaml
   - minio.yaml
   - beegit-server.yaml
+  - beegit-web.yaml
 
 images:
   - name: beegit
     newName: beecodersregistry.azurecr.io/beegit
     newTag: latest   # scripts/deploy-k3s.sh replaces this with the deployed version
+  - name: beegit-web
+    newName: beecodersregistry.azurecr.io/beegit-web
+    newTag: latest
 
 configMapGenerator:
   - name: beegit-config

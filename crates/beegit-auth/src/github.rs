@@ -46,6 +46,27 @@ pub(crate) fn http_client() -> Option<reqwest::Client> {
 }
 
 #[derive(Deserialize)]
+struct CodeExchangeResponse {
+    access_token: Option<String>,
+    error: Option<String>,
+}
+
+/// The parameters of GitHub's web-flow code exchange (amendment B-5).
+#[derive(Clone, Debug)]
+pub struct CodeExchange<'a> {
+    /// GitHub OAuth base URL (`https://github.com`).
+    pub oauth_base_url: &'a str,
+    /// OAuth App client id.
+    pub client_id: &'a str,
+    /// OAuth App client secret.
+    pub client_secret: &'a str,
+    /// Authorization code from the redirect.
+    pub code: &'a str,
+    /// The redirect URI used in the authorize request.
+    pub redirect_uri: &'a str,
+}
+
+#[derive(Deserialize)]
 struct UserResponse {
     login: String,
     id: u64,
@@ -57,6 +78,56 @@ impl GitHubClient {
         GitHubClient {
             api_url: api_url.trim_end_matches('/').to_owned(),
             http: http_client(),
+        }
+    }
+
+    /// `POST {oauth_base_url}/login/oauth/access_token` for a web-flow authorization code
+    /// (amendment B-5). GitHub answers 200 with `{"error": ...}` for a bad, spent or
+    /// mismatched code => UNAUTHENTICATED; transport failures, 429 and 5xx => UNAVAILABLE.
+    /// Neither the code, the secret nor the token is logged.
+    pub async fn exchange_code(&self, x: &CodeExchange<'_>) -> Result<String> {
+        let http = self
+            .http
+            .as_ref()
+            .ok_or_else(|| github_unavailable("no HTTP client"))?;
+        let resp = http
+            .post(format!(
+                "{}/login/oauth/access_token",
+                x.oauth_base_url.trim_end_matches('/')
+            ))
+            .header(reqwest::header::ACCEPT, "application/json")
+            .form(&[
+                ("client_id", x.client_id),
+                ("client_secret", x.client_secret),
+                ("code", x.code),
+                ("redirect_uri", x.redirect_uri),
+            ])
+            .send()
+            .await
+            .map_err(|e| {
+                tracing::warn!(error = %e.without_url(), "GitHub code exchange failed");
+                github_unavailable("transport error")
+            })?;
+        let status = resp.status();
+        if status == reqwest::StatusCode::TOO_MANY_REQUESTS || status.is_server_error() {
+            return Err(github_unavailable(&format!("HTTP {}", status.as_u16())));
+        }
+        if !status.is_success() {
+            return Err(BeeGitError::unauthenticated(format!(
+                "GitHub rejected the authorization code (HTTP {})",
+                status.as_u16()
+            )));
+        }
+        let body: CodeExchangeResponse = resp
+            .json()
+            .await
+            .map_err(|_| github_unavailable("malformed code exchange response"))?;
+        match (body.access_token, body.error) {
+            (Some(t), _) if !t.is_empty() => Ok(t),
+            (_, Some(e)) => Err(BeeGitError::unauthenticated(format!(
+                "GitHub rejected the authorization code ({e})"
+            ))),
+            _ => Err(github_unavailable("code exchange returned no token")),
         }
     }
 

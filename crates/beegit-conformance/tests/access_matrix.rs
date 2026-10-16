@@ -314,6 +314,7 @@ async fn run_case(method: &str, s: Scenario, via: Via, c: &BeeGitClient, f: &Fix
                 &w(""),
                 c.query()
                     .get_changesets(v1::GetChangesetsRequest {
+                        structured: false,
                         ids: vec![idb(&f.c1), idb(&f.c2)],
                     })
                     .await,
@@ -382,6 +383,7 @@ async fn run_case(method: &str, s: Scenario, via: Via, c: &BeeGitClient, f: &Fix
         }
         "Log" => {
             let req = |path: Option<String>| v1::LogRequest {
+                structured: false,
                 from: idb(&f.c2),
                 path: path.map(String::into_bytes),
                 first_parent_only: false,
