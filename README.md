@@ -26,10 +26,13 @@ list of changes.
 Prerequisites: Rust via rustup, `protoc`, `openssl`, and Docker **or** Podman with Compose.
 
 ```sh
-make build          # debug build of the workspace (first build takes a few minutes)
-make dev-up         # secrets → image → CockroachDB + MinIO + beegit-server on :7443
-make smoke          # end-to-end: login, commit, land, log, cat, sparse checkout
+./start.sh                # secrets → build → CockroachDB + MinIO + beegit-server on :7443
+./start.sh --smoke        # same, then an end-to-end test (login, commit, land, log, cat, sparse)
+./start.sh --native       # run beegit-server from source instead of in a container
+./start.sh --status | --logs | --stop | --reset
 ```
+
+(The `make dev-up`, `make run-server` and `make smoke` targets do the same steps individually.)
 
 Then use the CLI yourself:
 
