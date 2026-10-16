@@ -641,7 +641,6 @@ dependencies = [
  "tonic",
  "tonic-prost",
  "tonic-prost-build",
- "tonic-web",
  "tower",
  "tower-layer",
  "tower-service",

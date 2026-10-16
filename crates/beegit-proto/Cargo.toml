@@ -17,7 +17,6 @@ beegit-core = { workspace = true }
 beegit-object = { workspace = true }
 tonic = { workspace = true }
 tonic-prost = { workspace = true }
-tonic-web = { workspace = true }
 prost = { workspace = true }
 prost-types = { workspace = true }
 tower = { workspace = true }

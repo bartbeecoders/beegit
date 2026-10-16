@@ -57,7 +57,8 @@ trailers so caches can tell when to invalidate.
 outermost layer of every service). Clients pick with the endpoint scheme: `https://` for gRPC,
 `grpc-web+https://` for gRPC-Web, which carries the status and trailers in the response body
 and therefore survives proxies that drop HTTP/2 trailers (Cloudflare Tunnel). See
-`beegit-proto/src/client.rs` (`Conn`) and amendment B-2.
+`beegit-proto/src/client.rs` (`Conn`), `beegit-proto/src/grpc_web.rs` (the client-side decoder) and
+amendment B-2.
 
 ## Crate map
 

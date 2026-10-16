@@ -6,8 +6,8 @@
 //! - [`EpochCapture`] counts calls and records the epochs of the most recent response, read from
 //!   the trailers frame or, for trailers-only responses, from the headers (SPEC 7.1);
 //! - [`Conn`] is the HTTP/2 [`Channel`], either directly or, for a
-//!   [`Endpoint::GrpcWeb`] endpoint, behind tonic-web's gRPC-Web client translation, which
-//!   moves the status and trailers into the response body so proxies cannot drop them.
+//!   [`Endpoint::GrpcWeb`] endpoint, behind the gRPC-Web translation of [`crate::grpc_web`],
+//!   which reads the status and trailers from the response body so proxies cannot drop them.
 
 use crate::endpoint::{Endpoint, TlsOptions};
 use crate::trailers::{Epochs, read_epochs};
@@ -85,17 +85,15 @@ fn make_conn(channel: Channel, grpc_web: bool) -> Conn {
     if !grpc_web {
         return Conn::new(channel);
     }
-    // tonic-web marks requests HTTP/1.1 (it targets browsers); the channel speaks HTTP/2 only,
-    // and gRPC-Web is valid over HTTP/2, so restore the version underneath it.
-    let h2 = channel.map_request(
-        |req: http::Request<tonic_web::GrpcWebCall<tonic::body::Body>>| {
-            let mut req = req.map(tonic::body::Body::new);
-            *req.version_mut() = http::Version::HTTP_2;
-            req
-        },
-    );
-    let web = tonic_web::GrpcWebClientService::new(h2)
-        .map_response(|res| res.map(tonic::body::Body::new));
+    let web = channel
+        .map_request(crate::grpc_web::request::<tonic::body::Body>)
+        .map_response(|res: http::Response<tonic::body::Body>| {
+            if crate::grpc_web::is_grpc_web(res.headers()) {
+                res.map(|b| tonic::body::Body::new(crate::grpc_web::WebBody::new(b)))
+            } else {
+                res
+            }
+        });
     Conn::new(web)
 }
 

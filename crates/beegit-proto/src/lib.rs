@@ -30,6 +30,7 @@ pub mod v1 {
 mod client;
 pub mod convert;
 mod endpoint;
+mod grpc_web;
 pub mod raw;
 mod status;
 mod trailers;
