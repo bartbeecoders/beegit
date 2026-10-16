@@ -1,0 +1,7 @@
+{
+  "name": "tree_even_extension",
+  "kind": "tree",
+  "description": "tree_single_file plus one unknown even (ignorable) extension: tag 6, value \"beegit-ext\". Preserved byte for byte; changes the id.",
+  "hex": "01010968656c6c6f2e7478740101018e4c7c1b99dbfd50e7a95185fead5ee1448fa904a2fdd778eaf5f2dbfd629a990601060a6265656769742d657874",
+  "id_text": "t1ca0d23e82bb10797c3b4795aa3ca24ab30b657b7a3d29e14ac2b1ce11aaa87ce"
+}

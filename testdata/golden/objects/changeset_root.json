@@ -1,0 +1,7 @@
+{
+  "name": "changeset_root",
+  "kind": "changeset",
+  "description": "Root changeset (PLAN 6.5): no parents, root_tree = tree_empty id, meta = meta_root id, change_id = first 16 bytes of BLAKE3(\"beegit-root-v1\"), empty delta, no extensions.",
+  "hex": "01000102396eab8ebe8b2247fed631cee54835e0c8678ab1cc0d5b8a73f9f86e813187d501047685afe82b40f707353c35f87240b45b65ed040da41ce6b81aa788dcba26abb027e8ba02e3b199ddcb1e29b2eddd3a400000",
+  "id_text": "c13ef7eff7573f9a238569603cc5f26bcadb3c704b3952201730a100989fd38cdb"
+}

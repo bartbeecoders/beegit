@@ -1,0 +1,46 @@
+# BeeGit on K3s: CockroachDB + MinIO + beegit-server in namespace `beegit`.
+#
+# Secrets are generated from deploy/k3s/state (make k3s-secrets) and never committed.
+# deploy.sh streams this directory to the VPS and runs `k3s kubectl apply -k` there.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: beegit
+
+resources:
+  - namespace.yaml
+  - cockroach.yaml
+  - minio.yaml
+  - beegit-server.yaml
+
+images:
+  - name: beegit
+    newName: beegit.local/beegit
+    newTag: latest   # deploy.sh replaces this with the built tag
+
+configMapGenerator:
+  - name: beegit-config
+    files:
+      - beegit-server.toml=bundle/beegit-server.toml   # deploy.sh copies config/ here
+  - name: beegit-policy
+    files:
+      - acl.toml=state/acl.toml
+
+secretGenerator:
+  - name: beegit-tls
+    type: kubernetes.io/tls
+    files:
+      - tls.crt=state/tls.crt
+      - tls.key=state/tls.key
+  - name: beegit-signing
+    files:
+      - signing.ed25519.pem=state/signing.ed25519.pem
+  - name: beegit-server-env
+    envs:
+      - state/secrets.env
+  - name: beegit-s3
+    envs:
+      - state/s3.env
+
+generatorOptions:
+  labels:
+    app.kubernetes.io/part-of: beegit

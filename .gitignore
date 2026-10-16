@@ -1,0 +1,6 @@
+target/
+# Upstream Scion checkout kept for reference / diffing
+/scion/
+# Local dev state (certs, keys, tokens, data)
+/dev/state/
+/deploy/k3s/state/

@@ -1,0 +1,17 @@
+BeeGit
+Copyright 2026 Bart Roelant / BeeCoders
+
+This product is a modified version of Scion (https://github.com/CarterT27/scion),
+Copyright 2026 Carter Tran, licensed under the Apache License, Version 2.0.
+Forked from upstream commit 7d445a0 on 2026-10-16.
+
+Modifications made for BeeGit (see docs/contracts/amendments.md, entry B-1):
+  - Renamed the project, crates, binaries, environment variables, protocol package
+    (scion.v1 -> beegit.v1), metrics, CLI schema ids and object-format domain strings
+    from "scion" to "beegit"; regenerated the frozen object golden vectors accordingly.
+  - Added container image, local development stack, K3s deployment, and documentation.
+
+Scion is an independent implementation inspired by Anthropic's article "Redesigning source
+control"; neither Scion nor BeeGit is affiliated with or endorsed by Anthropic.
+
+Third-party Git fixtures in corpus/git retain their own license notices.

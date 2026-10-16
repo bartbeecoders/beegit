@@ -1,0 +1,94 @@
+# beegit-server: stateless gRPC/TLS front end. It terminates TLS itself, so it is exposed as a
+# plain TCP LoadBalancer (K3s ServiceLB binds port 7443 on the node) instead of an Ingress.
+apiVersion: v1
+kind: Service
+metadata:
+  name: beegit-server
+  labels: { app: beegit-server }
+spec:
+  type: LoadBalancer
+  selector: { app: beegit-server }
+  ports:
+    - { name: grpc, port: 7443, targetPort: 7443 }
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: beegit-server-admin
+  labels: { app: beegit-server }
+spec:
+  selector: { app: beegit-server }
+  ports:
+    - { name: metrics, port: 9464, targetPort: 9464 }
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: beegit-server
+spec:
+  replicas: 1
+  selector:
+    matchLabels: { app: beegit-server }
+  template:
+    metadata:
+      labels: { app: beegit-server }
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9464"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+      initContainers:
+        # Startup fails if the backends are unreachable; wait for them instead of crash-looping.
+        - name: wait-backends
+          image: beegit
+          command:
+            - sh
+            - -c
+            - |
+              until curl -fsS http://beegit-cockroach:8080/health?ready=1 >/dev/null; do sleep 2; done
+              until curl -fsS http://beegit-minio:9000/minio/health/ready >/dev/null; do sleep 2; done
+      containers:
+        - name: server
+          image: beegit
+          imagePullPolicy: IfNotPresent
+          args: ["beegit-server", "--config", "/etc/beegit/config/beegit-server.toml"]
+          envFrom:
+            - secretRef: { name: beegit-server-env }
+            - secretRef: { name: beegit-s3 }
+          env:
+            - { name: BEEGIT_DB_URL, value: "postgresql://root@beegit-cockroach:26257/defaultdb?sslmode=disable" }
+            - { name: BEEGIT_S3_ENDPOINT, value: "http://beegit-minio:9000" }
+            - { name: BEEGIT_S3_BUCKET, value: beegit }
+            - { name: BEEGIT_GITHUB_CLIENT_ID, value: not-configured }
+            - { name: AWS_REGION, value: us-east-1 }
+          ports:
+            - { containerPort: 7443, name: grpc }
+            - { containerPort: 9464, name: metrics }
+          readinessProbe:
+            httpGet: { path: /readyz, port: 9464 }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: 9464 }
+            initialDelaySeconds: 15
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 128Mi }
+            limits: { memory: 1Gi }
+          volumeMounts:
+            - { name: config, mountPath: /etc/beegit/config, readOnly: true }
+            - { name: policy, mountPath: /etc/beegit/policy, readOnly: true }
+            - { name: tls, mountPath: /etc/beegit/tls, readOnly: true }
+            - { name: signing, mountPath: /etc/beegit/keys, readOnly: true }
+      volumes:
+        - name: config
+          configMap: { name: beegit-config }
+        - name: policy
+          configMap: { name: beegit-policy }
+        - name: tls
+          secret: { secretName: beegit-tls, defaultMode: 0440 }
+        - name: signing
+          secret: { secretName: beegit-signing, defaultMode: 0440 }

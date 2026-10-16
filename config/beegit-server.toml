@@ -1,0 +1,40 @@
+# BeeGit server configuration (SPEC 6.1).
+#
+# One file serves every environment: values of the exact form "$NAME" are read from the
+# environment at startup (an unset variable is a startup error). Local runs get them from
+# dev/env.sh, Docker Compose from docker/compose.dev.yml, K3s from deploy/k3s.
+
+[server]
+listen = "$BEEGIT_LISTEN"            # e.g. 0.0.0.0:7443
+tls_cert = "$BEEGIT_TLS_CERT"
+tls_key = "$BEEGIT_TLS_KEY"
+repo = "$BEEGIT_REPO"                # repository name, e.g. monorepo
+
+[metadata]
+url = "$BEEGIT_DB_URL"               # CockroachDB, postgresql://...
+max_connections = 32
+
+[objects]
+endpoint = "$BEEGIT_S3_ENDPOINT"     # S3-compatible (MinIO); credentials from AWS_* env
+bucket = "$BEEGIT_S3_BUCKET"
+region = "us-east-1"
+path_style = true
+
+[auth]
+# GitHub OAuth App used for `beegit login` (device flow). Service principals work without it;
+# any placeholder value is fine until you register an OAuth App.
+github_client_id = "$BEEGIT_GITHUB_CLIENT_ID"
+token_ttl = "12h"
+signing_keys = ["$BEEGIT_SIGNING_KEY"]   # first key signs; all keys verify
+
+[[auth.service_principals]]
+name = "admin"
+secret_sha256 = "$BEEGIT_ADMIN_SECRET_SHA256"
+
+[policy]
+path = "$BEEGIT_POLICY_PATH"
+reload = true
+
+[observability]
+log_format = "$BEEGIT_LOG_FORMAT"    # json or text
+metrics_listen = "$BEEGIT_METRICS_LISTEN"   # /metrics, /healthz, /readyz

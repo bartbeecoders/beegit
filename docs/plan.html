@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>BeeGit Plan</title>
+<meta name="description" content="BeeGit roadmap: improvements and tasks after the fork from Scion.">
+<style>
+/*
+  HOW TO EDIT THIS PLAN
+  ---------------------
+  All content lives in the TASKS array in the script block at the bottom (PHASES just above it).
+  To add a task, copy an existing entry and change the fields:
+    id        unique, e.g. "B-FEAT-9" (area prefix + number)
+    title     one line
+    phase     one of the PHASES ids
+    area      feature | ops | security | bug | ux | perf | quality | release
+    priority  P0 (now) … P3 (someday)
+    effort    S (< 1 day) | M (days) | L (1–2 weeks) | XL (weeks+)
+    status    done | doing | todo | idea
+    detail    a sentence or two; simple HTML allowed (<code>, <a>)
+    refs      optional list of files / docs
+    by        who proposed it, e.g. "claude" or "bart"
+  Open the file in a browser; no build step.
+*/
+:root {
+  --bg: #fbfaf7; --surface: #ffffff; --surface-2: #f3f1ec; --border: #e4e0d6;
+  --text: #1d1b16; --muted: #6b665a; --accent: #b7791f; --accent-soft: #fbefd5;
+  --done: #2f855a; --done-soft: #e3f4ea; --doing: #2b6cb0; --doing-soft: #e2edf9;
+  --todo: #6b665a; --todo-soft: #efede7; --idea: #805ad5; --idea-soft: #eee8fa;
+  --p0: #c53030; --p1: #c05621; --p2: #6b665a; --p3: #a09a8c;
+  --shadow: 0 1px 2px rgba(29, 27, 22, .06), 0 1px 1px rgba(29, 27, 22, .04);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #15140f; --surface: #1d1c16; --surface-2: #26241d; --border: #35322a;
+    --text: #ece8dd; --muted: #a39d8e; --accent: #f0b54a; --accent-soft: #3a2e17;
+    --done: #68d391; --done-soft: #1d3326; --doing: #7fb3ec; --doing-soft: #1b2a3c;
+    --todo: #a39d8e; --todo-soft: #2a2821; --idea: #b79cf0; --idea-soft: #2a2238;
+    --p0: #fc8181; --p1: #f6ad55; --p2: #a39d8e; --p3: #6f6a5e;
+    --shadow: none;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #15140f; --surface: #1d1c16; --surface-2: #26241d; --border: #35322a;
+  --text: #ece8dd; --muted: #a39d8e; --accent: #f0b54a; --accent-soft: #3a2e17;
+  --done: #68d391; --done-soft: #1d3326; --doing: #7fb3ec; --doing-soft: #1b2a3c;
+  --todo: #a39d8e; --todo-soft: #2a2821; --idea: #b79cf0; --idea-soft: #2a2238;
+  --p0: #fc8181; --p1: #f6ad55; --p2: #a39d8e; --p3: #6f6a5e;
+  --shadow: none;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--text);
+  font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+code { font: 13px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  background: var(--surface-2); padding: 1px 5px; border-radius: 4px; overflow-wrap: anywhere; }
+a { color: var(--accent); }
+.wrap { max-width: 1040px; margin: 0 auto; padding: 32px 16px 64px; }
+header h1 { font-size: 28px; line-height: 1.2; margin: 0 0 6px; letter-spacing: -.01em; }
+header p { margin: 0; color: var(--muted); max-width: 70ch; }
+.stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px; margin: 24px 0 8px; }
+.stat { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; box-shadow: var(--shadow); }
+.stat b { display: block; font-size: 22px; font-variant-numeric: tabular-nums; }
+.stat span { color: var(--muted); font-size: 13px; }
+.bar { height: 8px; border-radius: 99px; background: var(--surface-2); overflow: hidden;
+  display: flex; margin: 14px 0 28px; }
+.bar i { display: block; height: 100%; }
+.controls { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 20px;
+  position: sticky; top: 0; background: var(--bg); padding: 10px 0; z-index: 2; }
+.controls input[type=search] { flex: 1 1 220px; min-width: 0; padding: 8px 12px; border-radius: 8px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text); font: inherit; }
+.chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip { border: 1px solid var(--border); background: var(--surface); color: var(--text);
+  border-radius: 99px; padding: 4px 11px; font: inherit; font-size: 13px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); }
+.theme { margin-left: auto; }
+section.phase { margin: 0 0 30px; }
+section.phase h2 { font-size: 18px; margin: 0 0 2px; display: flex; gap: 10px; align-items: baseline;
+  flex-wrap: wrap; }
+section.phase h2 small { font-size: 13px; font-weight: 500; color: var(--muted); }
+section.phase > p { margin: 0 0 12px; color: var(--muted); font-size: 14px; max-width: 75ch; }
+.task { background: var(--surface); border: 1px solid var(--border); border-radius: 10px;
+  padding: 12px 14px; margin-bottom: 8px; box-shadow: var(--shadow);
+  display: grid; grid-template-columns: 92px 1fr auto; gap: 4px 14px; align-items: start; }
+.task .id { font: 12px/1.9 ui-monospace, Menlo, monospace; color: var(--muted); }
+.task h3 { font-size: 15px; margin: 0; line-height: 1.4; }
+.task .detail { grid-column: 2 / 4; color: var(--muted); font-size: 14px; }
+.task .refs { grid-column: 2 / 4; font-size: 12px; color: var(--muted); display: flex; gap: 6px;
+  flex-wrap: wrap; }
+.meta { display: flex; gap: 6px; flex-wrap: wrap; justify-content: flex-end; }
+.tag { font-size: 12px; border-radius: 6px; padding: 1px 7px; white-space: nowrap;
+  background: var(--surface-2); color: var(--muted); }
+.st-done { background: var(--done-soft); color: var(--done); }
+.st-doing { background: var(--doing-soft); color: var(--doing); }
+.st-todo { background: var(--todo-soft); color: var(--todo); }
+.st-idea { background: var(--idea-soft); color: var(--idea); }
+.pr { font-weight: 600; }
+.pr-P0 { color: var(--p0); } .pr-P1 { color: var(--p1); } .pr-P2 { color: var(--p2); } .pr-P3 { color: var(--p3); }
+.task.is-done { opacity: .78; }
+.empty { color: var(--muted); font-style: italic; }
+footer { color: var(--muted); font-size: 13px; border-top: 1px solid var(--border); padding-top: 16px;
+  margin-top: 40px; }
+@media (max-width: 640px) {
+  .task { grid-template-columns: 1fr; }
+  .task .detail, .task .refs { grid-column: 1; }
+  .meta { justify-content: flex-start; }
+  .theme { margin-left: 0; }
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <h1>🐝 BeeGit — plan &amp; tasks</h1>
+    <p>Roadmap after forking Scion into BeeGit (2026-10-16). Phase 0 is what was done in the fork;
+      the rest are proposed improvements. Edit the <code>TASKS</code> array at the bottom of this
+      file to add or update tasks.</p>
+  </header>
+
+  <div class="stats" id="stats"></div>
+  <div class="bar" id="bar" role="img" aria-label="Progress by status"></div>
+
+  <div class="controls">
+    <input type="search" id="q" placeholder="Search tasks…" aria-label="Search tasks">
+    <div class="chips" id="statusChips"></div>
+    <div class="chips" id="areaChips"></div>
+    <button class="chip theme" id="theme" type="button" aria-label="Toggle colour theme">◐ Theme</button>
+  </div>
+
+  <main id="phases"></main>
+
+  <footer>
+    Sources: <a href="../SPEC.md">SPEC.md</a> (Appendix A lists upstream's deferred work),
+    <a href="git-gateway.md">git-gateway.md</a>, <a href="deployment-k3s.md">deployment-k3s.md</a>,
+    <a href="contracts/amendments.md">amendments</a>. Findings marked “found during fork” were
+    observed while renaming, testing and running the stack locally.
+  </footer>
+</div>
+
+<script>
+const PHASES = [
+  { id: "p0", title: "Phase 0 — Fork & foundation",
+    blurb: "Make the code base ours, runnable locally, deployable, and documented." },
+  { id: "p1", title: "Phase 1 — Production on the VPS",
+    blurb: "Get a BeeGit server on 212.47.77.32 that we can trust with real code: backups, TLS, monitoring, CI." },
+  { id: "p2", title: "Phase 2 — Daily-driver usability",
+    blurb: "Fix the rough edges found while using it and add the commands people expect." },
+  { id: "p3", title: "Phase 3 — Ecosystem & differentiators",
+    blurb: "Git compatibility, a web UI, and first-class support for coding agents." },
+  { id: "p4", title: "Later / ideas",
+    blurb: "Worth doing once the basics are solid; mostly upstream's deferred list." },
+];
+
+const TASKS = [
+  // ---------------------------------------------------------------- Phase 0 (done in the fork)
+  { id: "B-FORK-1", phase: "p0", area: "quality", priority: "P0", effort: "M", status: "done", by: "claude",
+    title: "Fork Scion and rename everything to BeeGit",
+    detail: "Crates, binaries, env vars (<code>BEEGIT_*</code>), proto package <code>beegit.v1</code>, metrics, CLI schema ids, domain strings. Golden vectors regenerated; 1,337 tests, clippy and layer checks pass. Recorded as amendment B-1.",
+    refs: ["NOTICE", "docs/contracts/amendments.md"] },
+  { id: "B-FORK-2", phase: "p0", area: "ops", priority: "P0", effort: "S", status: "done", by: "claude",
+    title: "Local stack: secrets generator, config template, Compose (Docker or Podman)",
+    detail: "<code>make dev-up</code> runs CockroachDB + MinIO + server; <code>make run-server</code> runs the server from source. One <code>config/beegit-server.toml</code> for every environment via <code>$ENV</code> values.",
+    refs: ["dev/gen-secrets.sh", "docker/compose.dev.yml", "Makefile"] },
+  { id: "B-FORK-3", phase: "p0", area: "quality", priority: "P0", effort: "S", status: "done", by: "claude",
+    title: "End-to-end smoke test",
+    detail: "<code>make smoke</code>: login, whoami, checkout, commit, land, log, cat, sparse checkout — against local or remote servers. Verified natively and in containers; import and daemon verified by hand.",
+    refs: ["dev/smoke.sh"] },
+  { id: "B-FORK-4", phase: "p0", area: "ops", priority: "P0", effort: "M", status: "done", by: "claude",
+    title: "Container image and K3s manifests",
+    detail: "Multi-stage <code>Dockerfile</code> (non-root, healthcheck). Kustomize base with CockroachDB, MinIO, server, ServiceLB on 7443; <code>deploy.sh</code> ships the image over SSH (no registry). Manifests render with kustomize 5.4; <b>not yet applied to the VPS</b>.",
+    refs: ["Dockerfile", "deploy/k3s/"] },
+  { id: "B-FORK-5", phase: "p0", area: "quality", priority: "P1", effort: "S", status: "done", by: "claude",
+    title: "Documentation set and upstream-sync tooling",
+    detail: "README, getting started, K3s deployment, architecture, this plan; <code>scripts/rebrand-upstream.sh</code> renders upstream commits in BeeGit terms for porting fixes.",
+    refs: ["docs/", "scripts/rebrand-upstream.sh"] },
+
+  // ---------------------------------------------------------------- Phase 1
+  { id: "B-OPS-0", phase: "p1", area: "ops", priority: "P0", effort: "S", status: "todo", by: "claude",
+    title: "First deployment to the VPS",
+    detail: "Check node resources, open 7443/tcp, confirm passwordless <code>sudo k3s</code> (or kubeconfig access), <code>make k3s-secrets</code> + <code>make k3s-deploy</code>, run <code>dev/smoke.sh</code> against it.",
+    refs: ["docs/deployment-k3s.md"] },
+  { id: "B-OPS-1", phase: "p1", area: "ops", priority: "P0", effort: "M", status: "todo", by: "claude",
+    title: "Automated backups (CockroachDB + MinIO) with 30-day retention",
+    detail: "K8s CronJob: <code>BACKUP INTO</code> to an off-VPS S3 bucket plus <code>mc mirror</code> of objects; lifecycle rules enforce the 30-day bound required by the redaction contract. Document and test a restore.",
+    refs: ["docs/operations/backup-retention.md"] },
+  { id: "B-OPS-2", phase: "p1", area: "release", priority: "P1", effort: "M", status: "todo", by: "claude",
+    title: "CI: build, test and publish the image",
+    detail: "GitHub Actions (workflow copied from upstream) plus an image job pushing to GHCR; switch <code>deploy.sh</code> to pull a tagged image instead of streaming it. Optional: deploy on tag.",
+    refs: [".github/workflows/ci.yml", "deploy/k3s/deploy.sh"] },
+  { id: "B-OPS-3", phase: "p1", area: "ops", priority: "P1", effort: "S", status: "todo", by: "claude",
+    title: "Domain name and public TLS certificate",
+    detail: "Point e.g. <code>git.beecoders…</code> at the VPS, issue a Let's Encrypt cert (cert-manager DNS-01 or HTTP-01 via Traefik) into the <code>beegit-tls</code> secret, so clients need no private CA. Decision needed: which domain.",
+    refs: [] },
+  { id: "B-OPS-4", phase: "p1", area: "ops", priority: "P2", effort: "S", status: "todo", by: "claude",
+    title: "Hot-reload TLS certificates",
+    detail: "The server reads cert/key once at startup; with cert-manager rotation it needs a restart. Watch the files (as the policy reloader already does) and swap the rustls config.",
+    refs: ["crates/beegit-server/src/tls.rs", "crates/beegit-server/src/reload.rs"] },
+  { id: "B-OPS-5", phase: "p1", area: "ops", priority: "P1", effort: "M", status: "todo", by: "claude",
+    title: "Monitoring and alerts",
+    detail: "Scrape <code>:9464/metrics</code> (server already exports RPC, storage, CAS-failure, integrity metrics). Grafana dashboard + alerts on <code>beegit_integrity_failures_total</code>, readiness, disk usage of the PVCs.",
+    refs: ["crates/beegit-obs"] },
+  { id: "B-SEC-1", phase: "p1", area: "security", priority: "P1", effort: "S", status: "todo", by: "claude",
+    title: "Per-consumer service principals and secret handling",
+    detail: "Separate principals for CI, agents and import instead of <code>admin</code>; keep <code>deploy/k3s/state</code> encrypted (SOPS/age or sealed-secrets) so it can live in git safely.",
+    refs: ["deploy/k3s/state (git-ignored)"] },
+  { id: "B-SEC-2", phase: "p1", area: "security", priority: "P1", effort: "M", status: "todo", by: "claude",
+    title: "Lock down the backends",
+    detail: "NetworkPolicy so only <code>beegit-server</code> reaches CockroachDB/MinIO; run CockroachDB in secure mode. Found during fork: the server always connects to the database without TLS (<code>tls: None</code> in <code>main.rs</code>) — add a <code>[metadata]</code> TLS/CA option.",
+    refs: ["crates/beegit-server/src/main.rs", "crates/beegit-store-crdb"] },
+  { id: "B-BUG-1", phase: "p1", area: "bug", priority: "P1", effort: "S", status: "todo", by: "claude",
+    title: "<code>objects.prefix</code> is accepted but ignored",
+    detail: "Found during fork: <code>main.rs</code> passes <code>key_prefix: String::new()</code> to the S3 store, so the documented prefix has no effect. Wire it through (and test) before sharing one bucket between environments.",
+    refs: ["crates/beegit-server/src/main.rs", "crates/beegit-config/src/server.rs"] },
+  { id: "B-PERF-1", phase: "p1", area: "perf", priority: "P2", effort: "M", status: "todo", by: "claude",
+    title: "Benchmark BeeGit on Linux and on the VPS",
+    detail: "All published numbers are upstream's Apple M4 Pro measurements. Re-run the benchmark runner and scripts locally and against the K3s deployment (real network, durable storage).",
+    refs: ["docs/upstream/benchmarks.md", "scripts/benchmark-git.py"] },
+
+  // ---------------------------------------------------------------- Phase 2
+  { id: "B-CLI-1", phase: "p2", area: "feature", priority: "P1", effort: "M", status: "todo", by: "claude",
+    title: "Ref/branch commands in the CLI",
+    detail: "The server has <code>CreateRef</code>/<code>DeleteRef</code>/<code>GetRefLog</code> but the CLI has no <code>beegit ref list|create|delete|log</code>. Today a new branch only appears through <code>land --ref</code> or the importer.",
+    refs: ["proto/beegit/v1/beegit.proto", "crates/beegit-cli/src/cli/args.rs"] },
+  { id: "B-UX-1", phase: "p2", area: "ux", priority: "P2", effort: "S", status: "todo", by: "claude",
+    title: "<code>beegit log main</code> silently prints nothing",
+    detail: "Found during fork: the positional argument is a path, so <code>log main</code> filters on a path called <code>main</code>. Warn when the path does not exist but a ref of that name does, or accept <code>log &lt;rev&gt; -- &lt;path&gt;</code> like git.",
+    refs: ["crates/beegit-cli/src/cli/query.rs"] },
+  { id: "B-UX-2", phase: "p2", area: "ux", priority: "P3", effort: "S", status: "todo", by: "claude",
+    title: "Readable dates in <code>log</code>/<code>show</code>",
+    detail: "Found during fork: dates print as UTC with a trailing author offset (<code>09:42:26Z +0200</code>), which reads as a contradiction. Show the time in the author's offset (git style) or local time.",
+    refs: ["crates/beegit-cli"] },
+  { id: "B-UX-3", phase: "p2", area: "ux", priority: "P3", effort: "S", status: "todo", by: "claude",
+    title: "Friendlier connection errors",
+    detail: "E.g. a long daemon socket path fails with “path must be shorter than SUN_LEN”; TLS name mismatches surface as generic UNAVAILABLE. Add hints (CA file, SANs, socket length).",
+    refs: [] },
+  { id: "B-AUTH-1", phase: "p2", area: "feature", priority: "P1", effort: "L", status: "idea", by: "claude",
+    title: "Logins without GitHub: OIDC and personal access tokens",
+    detail: "Humans can only log in through GitHub's device flow. Add generic OIDC (Google, Authentik/Keycloak) and server-issued PATs managed by admins, so BeeCoders users don't need GitHub accounts.",
+    refs: ["crates/beegit-auth"] },
+  { id: "B-REL-1", phase: "p2", area: "release", priority: "P2", effort: "M", status: "todo", by: "claude",
+    title: "Client distribution",
+    detail: "Release binaries of <code>beegit</code>/<code>beegit-daemon</code> for Linux x86_64/arm64 and macOS, a one-line installer, and a systemd user unit for the daemon.",
+    refs: [] },
+  { id: "B-FEAT-4", phase: "p2", area: "feature", priority: "P2", effort: "M", status: "idea", by: "claude",
+    title: "Webhooks / event stream on ref updates",
+    detail: "Notify CI and chat when a ref moves (the ref log already records every CAS). A streaming <code>WatchRefs</code> RPC or HTTP webhooks with retries.",
+    refs: [] },
+
+  // ---------------------------------------------------------------- Phase 3
+  { id: "B-FEAT-1", phase: "p3", area: "feature", priority: "P1", effort: "XL", status: "idea", by: "claude",
+    title: "Git gateway (smart HTTP clone/fetch/push)",
+    detail: "Let unmodified git clients, IDEs and existing CI talk to BeeGit. A detailed draft design already exists (Addendum G); pushes become changesets and <code>refs/for/&lt;ref&gt;</code> lands lock-free.",
+    refs: ["docs/git-gateway.md"] },
+  { id: "B-FEAT-2", phase: "p3", area: "feature", priority: "P2", effort: "L", status: "idea", by: "claude",
+    title: "Web UI: browse trees, history, diffs, blame",
+    detail: "A small web front end over the existing query RPCs (gRPC-web or a thin HTTP/JSON gateway), respecting the same ACLs.",
+    refs: [] },
+  { id: "B-FEAT-3", phase: "p3", area: "feature", priority: "P2", effort: "XL", status: "idea", by: "claude",
+    title: "Lightweight review: proposals on changesets",
+    detail: "Open a proposal for a stack, comment on diff lines, approve, then land. Stable <code>change_id</code>s make iterating on a stack (amend) natural.",
+    refs: [] },
+  { id: "B-FEAT-7", phase: "p3", area: "feature", priority: "P1", effort: "M", status: "idea", by: "claude",
+    title: "MCP server for coding agents",
+    detail: "Expose checkout/read/diff/commit/land/log as MCP tools, so agents can work against BeeGit without a full working copy (server-side reads and writes are exactly what agents need).",
+    refs: [] },
+  { id: "B-FEAT-5", phase: "p3", area: "feature", priority: "P2", effort: "L", status: "idea", by: "claude",
+    title: "Multiple repositories per server",
+    detail: "Storage is already keyed by <code>repo_id</code> first; the server is configured with a single <code>server.repo</code>. Add repo selection to the protocol and per-repo policies.",
+    refs: ["crates/beegit-store-crdb/src/migrations.rs"] },
+
+  // ---------------------------------------------------------------- Later / ideas (upstream's deferred list)
+  { id: "B-LATER-1", phase: "p4", area: "perf", priority: "P3", effort: "L", status: "idea", by: "claude",
+    title: "Filesystem-watcher status", detail: "Replace the stat walk with inotify/FSEvents for large working copies.", refs: ["SPEC.md Appendix A"] },
+  { id: "B-LATER-2", phase: "p4", area: "perf", priority: "P3", effort: "XL", status: "idea", by: "claude",
+    title: "Virtualized (FUSE) checkouts", detail: "Materialize files lazily on first read.", refs: ["SPEC.md Appendix A"] },
+  { id: "B-LATER-3", phase: "p4", area: "perf", priority: "P3", effort: "L", status: "idea", by: "claude",
+    title: "Daemon snapshot bootstrap and regional cache servers", detail: "Warm new CI nodes from a snapshot; share a cache tier between nodes.", refs: ["SPEC.md Appendix A"] },
+  { id: "B-LATER-4", phase: "p4", area: "feature", priority: "P3", effort: "M", status: "idea", by: "claude",
+    title: "Copy and rename detection in diff/blame", detail: "Deferred upstream; matters for refactors.", refs: ["SPEC.md Appendix A"] },
+  { id: "B-LATER-5", phase: "p4", area: "feature", priority: "P3", effort: "L", status: "idea", by: "claude",
+    title: "Windows client", detail: "The working copy and daemon are Unix-only (Unix sockets, file modes, rustix).", refs: ["crates/beegit-wc", "crates/beegit-daemon"] },
+];
+
+// ---------------------------------------------------------------- rendering (no need to edit)
+const STATUSES = ["done", "doing", "todo", "idea"];
+const STATUS_LABEL = { done: "Done", doing: "In progress", todo: "To do", idea: "Idea" };
+const AREAS = [...new Set(TASKS.map(t => t.area))].sort();
+const state = { q: "", status: new Set(), area: new Set() };
+const $ = s => document.querySelector(s);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
+const strip = s => String(s).replace(/<[^>]*>/g, "");
+
+function chips(el, values, set, label) {
+  el.innerHTML = "";
+  for (const v of values) {
+    const b = document.createElement("button");
+    b.type = "button"; b.className = "chip"; b.textContent = label(v);
+    b.setAttribute("aria-pressed", set.has(v));
+    b.onclick = () => { set.has(v) ? set.delete(v) : set.add(v); b.setAttribute("aria-pressed", set.has(v)); render(); };
+    el.appendChild(b);
+  }
+}
+
+function matches(t) {
+  if (state.status.size && !state.status.has(t.status)) return false;
+  if (state.area.size && !state.area.has(t.area)) return false;
+  if (!state.q) return true;
+  const hay = [t.id, t.title, t.detail, t.area, ...(t.refs || [])].map(strip).join(" ").toLowerCase();
+  return state.q.toLowerCase().split(/\s+/).every(w => hay.includes(w));
+}
+
+function render() {
+  const counts = Object.fromEntries(STATUSES.map(s => [s, TASKS.filter(t => t.status === s).length]));
+  $("#stats").innerHTML =
+    `<div class="stat"><b>${TASKS.length}</b><span>tasks</span></div>` +
+    STATUSES.map(s => `<div class="stat"><b>${counts[s]}</b><span>${STATUS_LABEL[s]}</span></div>`).join("");
+  $("#bar").innerHTML = STATUSES.map(s =>
+    `<i style="width:${(counts[s] / TASKS.length) * 100}%;background:var(--${s})" title="${STATUS_LABEL[s]}: ${counts[s]}"></i>`).join("");
+
+  const order = { P0: 0, P1: 1, P2: 2, P3: 3 };
+  $("#phases").innerHTML = PHASES.map(p => {
+    const items = TASKS.filter(t => t.phase === p.id && matches(t))
+      .sort((a, b) => (STATUSES.indexOf(a.status) - STATUSES.indexOf(b.status)) || (order[a.priority] - order[b.priority]));
+    const all = TASKS.filter(t => t.phase === p.id);
+    const done = all.filter(t => t.status === "done").length;
+    return `<section class="phase"><h2>${esc(p.title)} <small>${done}/${all.length} done</small></h2>
+      <p>${esc(p.blurb)}</p>
+      ${items.length ? items.map(t => `
+        <article class="task ${t.status === "done" ? "is-done" : ""}">
+          <div class="id">${esc(t.id)}</div>
+          <h3>${t.title}</h3>
+          <div class="meta">
+            <span class="tag st-${t.status}">${STATUS_LABEL[t.status]}</span>
+            <span class="tag pr pr-${t.priority}">${t.priority}</span>
+            <span class="tag" title="Effort">${t.effort}</span>
+            <span class="tag">${esc(t.area)}</span>
+          </div>
+          <div class="detail">${t.detail}</div>
+          ${(t.refs && t.refs.length) || t.by ? `<div class="refs">${(t.refs || []).map(r => `<code>${esc(r)}</code>`).join("")}${t.by ? `<span>· proposed by ${esc(t.by)}</span>` : ""}</div>` : ""}
+        </article>`).join("") : `<p class="empty">No tasks match the filters.</p>`}
+    </section>`;
+  }).join("");
+}
+
+chips($("#statusChips"), STATUSES, state.status, s => STATUS_LABEL[s]);
+chips($("#areaChips"), AREAS, state.area, a => a);
+$("#q").addEventListener("input", e => { state.q = e.target.value.trim(); render(); });
+$("#theme").onclick = () => {
+  const root = document.documentElement;
+  const dark = root.dataset.theme ? root.dataset.theme === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
+  root.dataset.theme = dark ? "light" : "dark";
+  try { localStorage.setItem("beegit-plan-theme", root.dataset.theme); } catch (e) {}
+};
+try { const t = localStorage.getItem("beegit-plan-theme"); if (t) document.documentElement.dataset.theme = t; } catch (e) {}
+render();
+</script>
+</body>
+</html>

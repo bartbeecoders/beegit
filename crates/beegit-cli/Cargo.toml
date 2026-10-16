@@ -1,0 +1,51 @@
+[package]
+name = "beegit-cli"
+description = "The beegit command-line client (SPEC 11.8)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[lib]
+name = "beegit_cli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "beegit"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[dependencies]
+beegit-core = { workspace = true }
+beegit-object = { workspace = true }
+beegit-config = { workspace = true }
+beegit-proto = { workspace = true }
+beegit-auth = { workspace = true }
+beegit-wc = { workspace = true }
+clap = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+schemars = { workspace = true }
+tokio = { workspace = true }
+tonic = { workspace = true }
+anyhow = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+humantime = { workspace = true }
+bytes = { workspace = true }
+futures = { workspace = true }
+tokio-stream = { workspace = true }
+zstd = { workspace = true }
+
+[dev-dependencies]
+beegit-testkit = { workspace = true }
+beegit-conformance = { workspace = true }
+beegit-refmodel = { workspace = true }
+assert_cmd = { workspace = true }
+jsonschema = { workspace = true }
+tempfile = { workspace = true }

@@ -1,0 +1,55 @@
+# Single-node CockroachDB for BeeGit metadata. Insecure mode is reachable only inside the
+# cluster (ClusterIP, no NodePort/Ingress). See docs/deployment-k3s.md for hardening.
+apiVersion: v1
+kind: Service
+metadata:
+  name: beegit-cockroach
+  labels: { app: beegit-cockroach }
+spec:
+  selector: { app: beegit-cockroach }
+  ports:
+    - { name: sql, port: 26257, targetPort: 26257 }
+    - { name: http, port: 8080, targetPort: 8080 }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: beegit-cockroach
+spec:
+  serviceName: beegit-cockroach
+  replicas: 1
+  selector:
+    matchLabels: { app: beegit-cockroach }
+  template:
+    metadata:
+      labels: { app: beegit-cockroach }
+    spec:
+      containers:
+        - name: cockroach
+          image: cockroachdb/cockroach:v24.3.5
+          args: ["start-single-node", "--insecure", "--cache=256MiB", "--max-sql-memory=256MiB"]
+          ports:
+            - { containerPort: 26257, name: sql }
+            - { containerPort: 8080, name: http }
+          readinessProbe:
+            httpGet: { path: "/health?ready=1", port: 8080 }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: 8080 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 250m, memory: 768Mi }
+            limits: { memory: 1536Mi }
+          volumeMounts:
+            - { name: data, mountPath: /cockroach/cockroach-data }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 10Gi

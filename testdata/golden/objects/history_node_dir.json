@@ -1,0 +1,7 @@
+{
+  "name": "history_node_dir",
+  "kind": "history_node",
+  "description": "HistoryNode Dir for the root path of changeset_single_parent: kind 2, content = tree_single_file id, changeset = changeset_single_parent id, parents [history_node_root_dir id], children [(\"hello.txt\", history_node_file id)], no extensions.",
+  "hex": "01020102f6995eab0ccb0c1071bc26572ecff6646f144e57f4eebe89acf76b840db9d42401039cb72ad41df450a26274357682897158d756ffeba9d08a224befaf055d21f5a701011064aeaa0c20b9fa724d6c8f6287b91e8e18168960ea3e08f52ad62360ba177cbe010968656c6c6f2e747874011080cb606de3bbe3e8d3d43e4d30864cb088818d7830fa47cffc16681fe9a744fa00",
+  "id_text": "x173dc8ae123174e840b2414a4b579acd053da94fdd155edb9d5df3a4ffe3dcb00"
+}

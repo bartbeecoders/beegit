@@ -1,0 +1,7 @@
+{
+  "name": "meta_root",
+  "kind": "meta",
+  "description": "Bootstrap Meta (PLAN 6.5): author \"beegit <beegit@localhost>\", author_time 0/0, no committer, no committer_time, creator \"service:beegit\", message \"root\", no extensions.",
+  "hex": "0119626565676974203c626565676974406c6f63616c686f73743e000000000e736572766963653a62656567697404726f6f7400",
+  "id_text": "m17685afe82b40f707353c35f87240b45b65ed040da41ce6b81aa788dcba26abb0"
+}

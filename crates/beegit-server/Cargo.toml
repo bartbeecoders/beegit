@@ -1,0 +1,78 @@
+[package]
+name = "beegit-server"
+description = "The authoritative BeeGit server (SPEC 3.1, 7)."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "beegit-server"
+path = "src/main.rs"
+
+[lints]
+workspace = true
+
+[features]
+testing = ["dep:tempfile"]
+
+[dependencies]
+tokio-util = { workspace = true }
+beegit-core = { workspace = true }
+beegit-object = { workspace = true }
+beegit-store = { workspace = true }
+beegit-store-crdb = { workspace = true }
+beegit-store-s3 = { workspace = true }
+beegit-merge = { workspace = true }
+beegit-history = { workspace = true }
+beegit-derived = { workspace = true }
+beegit-redaction = { workspace = true }
+beegit-policy = { workspace = true }
+beegit-auth = { workspace = true }
+beegit-config = { workspace = true }
+beegit-obs = { workspace = true }
+beegit-proto = { workspace = true }
+tonic = { workspace = true }
+tonic-prost = { workspace = true }
+prost = { workspace = true }
+tower = { workspace = true }
+tower-layer = { workspace = true }
+tower-service = { workspace = true }
+http = { workspace = true }
+http-body = { workspace = true }
+http-body-util = { workspace = true }
+hyper = { workspace = true }
+hyper-util = { workspace = true }
+rustls = { workspace = true }
+tokio-rustls = { workspace = true }
+rustls-pemfile = { workspace = true }
+rcgen = { workspace = true }
+tokio = { workspace = true }
+tokio-stream = { workspace = true }
+futures = { workspace = true }
+bytes = { workspace = true }
+pin-project-lite = { workspace = true }
+async-trait = { workspace = true }
+thiserror = { workspace = true }
+anyhow = { workspace = true }
+tracing = { workspace = true }
+governor = { workspace = true }
+parking_lot = { workspace = true }
+dashmap = { workspace = true }
+lru = { workspace = true }
+arc-swap = { workspace = true }
+uuid = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+zstd = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+tempfile = { workspace = true, optional = true }
+
+[dev-dependencies]
+beegit-server = { path = ".", features = ["testing"] }
+beegit-testkit = { workspace = true }
+tempfile = { workspace = true }
+proptest = { workspace = true }

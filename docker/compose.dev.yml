@@ -1,0 +1,78 @@
+# Local BeeGit stack: CockroachDB + MinIO + beegit-server.
+#
+#   make dev-up        (generates dev/state secrets, builds the image, starts everything)
+#   make dev-down      (stops; add -v via `make dev-reset` to wipe data)
+#
+# Backends only (to run beegit-server natively with `make run-server`):
+#   docker compose -f docker/compose.dev.yml up -d --wait cockroach minio
+name: beegit-dev
+
+services:
+  cockroach:
+    image: cockroachdb/cockroach:v24.3.5
+    command: start-single-node --insecure
+    ports:
+      - "26257:26257"
+      - "8080:8080"   # CockroachDB admin UI
+    volumes:
+      - cockroach-data:/cockroach/cockroach-data
+    healthcheck:
+      test: ["CMD", "cockroach", "sql", "--insecure", "--host=localhost:26257", "-e", "SELECT 1"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  minio:
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+      MINIO_DEFAULT_BUCKETS: beegit
+      MINIO_API_PORT_NUMBER: "9000"
+      MINIO_CONSOLE_PORT_NUMBER: "9001"
+    ports:
+      - "9000:9000"
+      - "9001:9001"   # MinIO console (minioadmin / minioadmin)
+    volumes:
+      - minio-data:/bitnami/minio/data
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:9000/minio/health/ready"]
+      interval: 2s
+      timeout: 5s
+      retries: 60
+
+  beegit-server:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: beegit:dev
+    profiles: ["server"]
+    # Run as the host user so the bind-mounted dev/state files (mode 0600) are readable.
+    user: "${BEEGIT_UID:-1000}:${BEEGIT_GID:-1000}"
+    depends_on:
+      cockroach: { condition: service_healthy }
+      minio: { condition: service_healthy }
+    env_file:
+      - ../dev/state/secrets.env
+    environment:
+      BEEGIT_DB_URL: postgresql://root@cockroach:26257/defaultdb?sslmode=disable
+      BEEGIT_S3_ENDPOINT: http://minio:9000
+      BEEGIT_S3_BUCKET: beegit
+      BEEGIT_GITHUB_CLIENT_ID: ${BEEGIT_GITHUB_CLIENT_ID:-not-configured}
+      BEEGIT_LOG_FORMAT: text
+      BEEGIT_TLS_CERT: /state/tls.crt
+      BEEGIT_TLS_KEY: /state/tls.key
+      BEEGIT_SIGNING_KEY: /state/signing.ed25519.pem
+      BEEGIT_POLICY_PATH: /state/acl.toml
+      AWS_ACCESS_KEY_ID: minioadmin
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      AWS_REGION: us-east-1
+    volumes:
+      - ../dev/state:/state:ro
+    ports:
+      - "7443:7443"
+      - "9464:9464"
+
+volumes:
+  cockroach-data:
+  minio-data:

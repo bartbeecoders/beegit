@@ -1,0 +1,7 @@
+target/
+scion/
+dev/state/
+Vibecoding/
+.git/
+**/*.log
+deploy/k3s/state/

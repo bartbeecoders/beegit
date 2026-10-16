@@ -1,0 +1,7 @@
+{
+  "name": "history_node_file",
+  "kind": "history_node",
+  "description": "HistoryNode File for \"hello.txt\" in changeset_single_parent: kind 1, content = blob id of \"hello\\n\", changeset = changeset_single_parent id, no parents, no children, no extensions.",
+  "hex": "010101018e4c7c1b99dbfd50e7a95185fead5ee1448fa904a2fdd778eaf5f2dbfd629a9901039cb72ad41df450a26274357682897158d756ffeba9d08a224befaf055d21f5a7000000",
+  "id_text": "x180cb606de3bbe3e8d3d43e4d30864cb088818d7830fa47cffc16681fe9a744fa"
+}

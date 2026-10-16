@@ -1,0 +1,54 @@
+# PLAN 1.3 layer allow-table, enforced by scripts/check-layers.sh.
+#
+# [allow]: for every workspace crate, the workspace crates it may depend on as a NORMAL or BUILD
+# dependency (optional dependencies count as normal). Exactly the "Internal deps" column of
+# docs/PLAN.md section 1.2. Every workspace crate must be listed.
+[allow]
+beegit-core = []
+beegit-object = ["beegit-core"]
+beegit-store = ["beegit-core", "beegit-object"]
+beegit-store-crdb = ["beegit-core", "beegit-object", "beegit-store"]
+beegit-store-s3 = ["beegit-core", "beegit-store"]
+beegit-merge = ["beegit-core"]
+beegit-history = ["beegit-core", "beegit-object", "beegit-store", "beegit-merge"]
+beegit-derived = ["beegit-core", "beegit-object", "beegit-store", "beegit-merge", "beegit-history"]
+beegit-redaction = ["beegit-core", "beegit-object", "beegit-store", "beegit-derived"]
+beegit-policy = ["beegit-core", "beegit-object"]
+beegit-auth = ["beegit-core"]
+beegit-config = ["beegit-core"]
+beegit-obs = ["beegit-core"]
+beegit-proto = ["beegit-core", "beegit-object"]
+beegit-server = [
+    "beegit-core", "beegit-object", "beegit-store", "beegit-store-crdb", "beegit-store-s3",
+    "beegit-merge", "beegit-history", "beegit-derived", "beegit-redaction", "beegit-policy",
+    "beegit-auth", "beegit-config", "beegit-obs", "beegit-proto",
+]
+beegit-cache = ["beegit-core", "beegit-object"]
+beegit-daemon = [
+    "beegit-core", "beegit-object", "beegit-cache", "beegit-auth", "beegit-config", "beegit-obs",
+    "beegit-proto",
+]
+beegit-wc = [
+    "beegit-core", "beegit-object", "beegit-merge", "beegit-cache", "beegit-config", "beegit-proto",
+    "beegit-auth",
+]
+beegit-cli = ["beegit-core", "beegit-object", "beegit-config", "beegit-proto", "beegit-auth", "beegit-wc"]
+beegit-import = ["beegit-core", "beegit-object", "beegit-proto", "beegit-auth"]
+beegit-refmodel = []
+beegit-testkit = ["beegit-core", "beegit-object", "beegit-proto", "beegit-refmodel"]
+# "all of the above"
+beegit-conformance = ["*"]
+
+# Hard check 1: crates with no beegit-* dependency of ANY kind (normal, build or dev).
+[isolated]
+crates = ["beegit-refmodel"]
+
+# Hard check 2: none of `from` may depend (normal or build) on any of `to`.
+[[forbidden]]
+from = ["beegit-core", "beegit-object", "beegit-store", "beegit-merge", "beegit-history", "beegit-derived"]
+to = ["beegit-policy", "beegit-auth", "beegit-server", "beegit-proto", "beegit-config", "beegit-obs"]
+
+# Hard check 3 (PLAN 1.2 dev-dependency rule): crates in the normal-dependency closure of
+# `crate` must not dev-depend on `crate` (it would create duplicate crate instances).
+[[no_dev_dependency_on_closure_of]]
+crate = "beegit-testkit"

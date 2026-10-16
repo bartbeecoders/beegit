@@ -1,0 +1,132 @@
+# BeeGit 🐝
+
+Server-first source control for always-online developers, coding agents and CI.
+
+BeeGit keeps history and the expensive operations (commit, rebase, merge, land, log, blame)
+on the server. Clients fetch immutable, content-addressed objects on demand and check out only
+the paths a job needs. There is no clone and no push: a commit is stored on the server the
+moment you make it.
+
+BeeGit is a fork of [Scion](https://github.com/CarterT27/scion) by Carter Tran (Apache 2.0),
+itself an independent implementation of the ideas in Anthropic's
+[Redesigning source control](https://www.anthropic.com/engineering/redesigning-source-control).
+Neither project is affiliated with Anthropic. See [NOTICE](NOTICE) for attribution and the
+list of changes.
+
+| | |
+| --- | --- |
+| **Status** | v0.1, single repository per server, Linux/macOS clients |
+| **Language** | Rust 1.98 (pinned), 23 crates, ~130k lines incl. tests |
+| **Storage** | CockroachDB (metadata) + any S3-compatible store (objects), e.g. MinIO |
+| **Protocol** | gRPC over TLS (`beegit.v1`), BLAKE3 object ids, zstd compression |
+| **Roadmap** | [docs/plan.html](docs/plan.html) — improvements and tasks |
+
+## Quick start (local, about 5 minutes)
+
+Prerequisites: Rust via rustup, `protoc`, `openssl`, and Docker **or** Podman with Compose.
+
+```sh
+make build          # debug build of the workspace (first build takes a few minutes)
+make dev-up         # secrets → image → CockroachDB + MinIO + beegit-server on :7443
+make smoke          # end-to-end: login, commit, land, log, cat, sparse checkout
+```
+
+Then use the CLI yourself:
+
+```sh
+source dev/env.sh                       # endpoint, CA, admin service credentials, PATH
+beegit login --service admin
+beegit checkout main ~/work/demo
+cd ~/work/demo && echo "hello" > hello.txt
+beegit status
+beegit commit -m "First BeeGit commit"
+beegit land --ref main
+beegit log --rev main
+```
+
+Prefer to run the server from source while hacking on it?
+`make dev-backends && make run-server` starts only the databases in containers and runs
+`beegit-server` natively. Details: [docs/getting-started.md](docs/getting-started.md).
+
+Import an existing Git repository (one-way, full history):
+
+```sh
+source dev/env.sh
+beegit-import --git /path/to/repo --ref HEAD --target-ref main --skip-submodules
+```
+
+## Deploy to the K3s VPS
+
+```sh
+BEEGIT_TLS_SANS="IP:212.47.77.32" make k3s-secrets   # once: TLS, keys, admin secret, S3 creds
+make k3s-deploy                                     # build image → ssh import → kubectl apply
+make k3s-status
+```
+
+No registry is needed: the image is streamed over SSH into K3s's containerd.
+Full guide, firewall notes and hardening: [docs/deployment-k3s.md](docs/deployment-k3s.md).
+
+## How it works
+
+```text
+ beegit CLI ── Unix socket ──▶ beegit-daemon ── TLS/gRPC ──▶ beegit-server ──┬── CockroachDB
+     │        (optional node cache, shared by jobs)              ▲          └── S3 / MinIO
+     └──────────────────────── TLS/gRPC ──────────────────────────┘
+```
+
+- **Server-side writes.** Commit, rebase, merge and land are RPCs. No push step.
+- **Incremental history.** Changesets store file deltas against their first parent plus a root
+  tree pointer; history queries (log, blame, diff, ancestry) run on the server.
+- **Sparse checkouts.** Fetch only the trees and blobs under the requested paths.
+- **Lock-free landing.** Rebase onto the ref and compare-and-swap it, retrying with backoff.
+- **Access control and redaction.** Path- and ref-level ACLs, GitHub device-flow login, service
+  principals for agents/CI, and quarantine/purge of leaked content without rewriting ids.
+
+More: [docs/architecture.md](docs/architecture.md) and the full [SPEC.md](SPEC.md).
+
+## Repository layout
+
+| Path | What |
+| --- | --- |
+| `crates/` | The 23 Rust crates (see [architecture](docs/architecture.md#crate-map)) |
+| `proto/beegit/v1/` | gRPC protocol definition |
+| `config/beegit-server.toml` | Server config template; every environment fills it via `$ENV` vars |
+| `dev/` | Local tooling: `gen-secrets.sh`, `env.sh`, `smoke.sh` (state goes to `dev/state/`, git-ignored) |
+| `docker/` | `compose.dev.yml` (local stack), `compose.test.yml` (external-backend tests) |
+| `deploy/k3s/` | Kustomize manifests and `deploy.sh` for the VPS |
+| `Dockerfile` | One image with `beegit-server`, `beegit`, `beegit-daemon`, `beegit-import` |
+| `docs/` | Guides, contracts, the [plan](docs/plan.html), [upstream benchmarks](docs/upstream/benchmarks.md) |
+| `schemas/v1/` | JSON schemas for `beegit --json` output |
+| `testdata/`, `corpus/` | Frozen golden vectors and Git fixtures |
+| `scion/` | Pristine upstream checkout for reference/diffing (git-ignored) |
+
+## Development
+
+```sh
+make help           # all targets
+make test           # hermetic suite: in-memory storage, loopback TLS, no Docker (~1,300 tests)
+make check          # fmt + build + test + clippy -D warnings + dependency-layer check
+scripts/test-external.sh --up --all   # the suite against real CockroachDB + MinIO
+```
+
+See [docs/testing.md](docs/testing.md) and [docs/upstream-sync.md](docs/upstream-sync.md)
+for pulling fixes from upstream Scion.
+
+## Documentation
+
+| Guide | |
+| --- | --- |
+| [Getting started](docs/getting-started.md) | Local stack, CLI workflow, config and env vars, daemon, import |
+| [Deployment on K3s](docs/deployment-k3s.md) | VPS deploy, operations, backups, hardening |
+| [Architecture](docs/architecture.md) | Components, data model, crate map, scope |
+| [Plan & tasks](docs/plan.html) | Roadmap of improvements (open in a browser) |
+| [SPEC.md](SPEC.md) | Normative specification (formats, RPCs, algorithms, tests) |
+| [Implementation-defined behaviour](docs/implementation-defined.md) | Choices the SPEC leaves open |
+| [Amendments](docs/contracts/amendments.md) | Every deviation from the frozen plan, incl. the fork (B-1) |
+| [Backup & retention](docs/operations/backup-retention.md) | Operational contract for backups |
+| [Git gateway (draft)](docs/git-gateway.md) | Design for serving unmodified git clients |
+
+## License
+
+Apache License 2.0 — see [LICENSE](LICENSE) and [NOTICE](NOTICE).
+Third-party Git fixtures retain their own license notices in [`corpus/git`](corpus/git).

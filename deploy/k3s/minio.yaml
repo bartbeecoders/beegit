@@ -1,0 +1,62 @@
+# MinIO object storage for BeeGit blobs and trees (ClusterIP only).
+apiVersion: v1
+kind: Service
+metadata:
+  name: beegit-minio
+  labels: { app: beegit-minio }
+spec:
+  selector: { app: beegit-minio }
+  ports:
+    - { name: s3, port: 9000, targetPort: 9000 }
+    - { name: console, port: 9001, targetPort: 9001 }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: beegit-minio
+spec:
+  serviceName: beegit-minio
+  replicas: 1
+  selector:
+    matchLabels: { app: beegit-minio }
+  template:
+    metadata:
+      labels: { app: beegit-minio }
+    spec:
+      securityContext:
+        fsGroup: 1001
+      containers:
+        - name: minio
+          image: bitnamilegacy/minio:2025.7.23-debian-12-r5
+          env:
+            - name: MINIO_ROOT_USER
+              valueFrom: { secretKeyRef: { name: beegit-s3, key: AWS_ACCESS_KEY_ID } }
+            - name: MINIO_ROOT_PASSWORD
+              valueFrom: { secretKeyRef: { name: beegit-s3, key: AWS_SECRET_ACCESS_KEY } }
+            - { name: MINIO_DEFAULT_BUCKETS, value: beegit }
+            - { name: MINIO_API_PORT_NUMBER, value: "9000" }
+            - { name: MINIO_CONSOLE_PORT_NUMBER, value: "9001" }
+          ports:
+            - { containerPort: 9000, name: s3 }
+            - { containerPort: 9001, name: console }
+          readinessProbe:
+            httpGet: { path: /minio/health/ready, port: 9000 }
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /minio/health/live, port: 9000 }
+            initialDelaySeconds: 20
+            periodSeconds: 10
+          resources:
+            requests: { cpu: 100m, memory: 256Mi }
+            limits: { memory: 1Gi }
+          volumeMounts:
+            - { name: data, mountPath: /bitnami/minio/data }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: local-path
+        resources:
+          requests:
+            storage: 20Gi
