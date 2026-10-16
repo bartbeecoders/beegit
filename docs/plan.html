@@ -10,6 +10,7 @@
   HOW TO EDIT THIS PLAN
   ---------------------
   All content lives in the TASKS array in the script block at the bottom (PHASES just above it).
+  Phases may carry doc: { href, label } to link a design document.
   To add a task, copy an existing entry and change the fields:
     id        unique, e.g. "B-FEAT-9" (area prefix + number)
     title     one line
@@ -20,6 +21,7 @@
     status    done | doing | todo | idea
     detail    a sentence or two; simple HTML allowed (<code>, <a>)
     refs      optional list of files / docs
+    needs     optional list of task ids this task depends on
     by        who proposed it, e.g. "claude" or "bart"
   Open the file in a browser; no build step.
 */
@@ -150,8 +152,11 @@ const PHASES = [
     blurb: "Get a BeeGit server on 212.47.77.32 that we can trust with real code: backups, TLS, monitoring, CI." },
   { id: "p2", title: "Phase 2 — Daily-driver usability",
     blurb: "Fix the rough edges found while using it and add the commands people expect." },
-  { id: "p3", title: "Phase 3 — Ecosystem & differentiators",
-    blurb: "Git compatibility, a web UI, and first-class support for coding agents." },
+  { id: "pweb", title: "Phase 3 — Web front end",
+    blurb: "A full browser view of BeeGit: repositories, trees and files, history, changesets and diffs, refs, blame and compare — served next to the API through the same Cloudflare hostname, authorized exactly like the CLI.",
+    doc: { href: "web-ui.md", label: "Design: docs/web-ui.md" } },
+  { id: "p3", title: "Phase 4 — Ecosystem & differentiators",
+    blurb: "Git compatibility, review, and first-class support for coding agents." },
   { id: "p4", title: "Later / ideas",
     blurb: "Worth doing once the basics are solid; mostly upstream's deferred list." },
 ];
@@ -259,26 +264,108 @@ const TASKS = [
     detail: "Notify CI and chat when a ref moves (the ref log already records every CAS). A streaming <code>WatchRefs</code> RPC or HTTP webhooks with retries.",
     refs: [] },
 
-  // ---------------------------------------------------------------- Phase 3
+  // ---------------------------------------------------------------- Phase 3: web front end
+  { id: "B-WEB-0", phase: "pweb", area: "feature", priority: "P1", effort: "S", status: "done", by: "bart",
+    title: "Design the web front end",
+    detail: "Architecture (React SPA calling the server's gRPC-Web endpoint directly, same hostname with a path-routed tunnel, no CORS), pages and the RPCs behind them, server prerequisites, UX rules, deployment and tests.",
+    refs: ["docs/web-ui.md"] },
+
+  // server prerequisites
+  { id: "B-WEB-1", phase: "pweb", area: "feature", priority: "P1", effort: "M", status: "todo", by: "claude",
+    title: "<code>ListRefs</code> RPC",
+    detail: "There is no way to list refs today. Return names, targets and versions with a prefix filter and pagination, filtered by the caller's read access. Also gives the CLI <code>beegit ref list</code> (B-CLI-1).",
+    refs: ["proto/beegit/v1/beegit.proto", "crates/beegit-server/src/handlers"], needs: [] },
+  { id: "B-WEB-2", phase: "pweb", area: "security", priority: "P1", effort: "M", status: "todo", by: "claude",
+    title: "Browser login: GitHub web OAuth flow",
+    detail: "The device flow is for terminals and GitHub's endpoints refuse browser CORS. Add <code>/auth/github/start</code> + <code>/auth/github/callback</code> that exchange the code server-side and return a normal BeeGit token (12 h). Token kept in memory/<code>sessionStorage</code>; service secrets never in a browser.",
+    refs: ["crates/beegit-auth", "crates/beegit-server"], needs: [] },
+  { id: "B-WEB-3", phase: "pweb", area: "feature", priority: "P1", effort: "S", status: "todo", by: "claude",
+    title: "gRPC-Web over HTTP/1.1",
+    detail: "The server only accepts HTTP/2. Enable <code>accept_http1</code> for gRPC-Web so the Vite dev proxy (HTTP/1.1) and proxies without HTTP/2 to the origin work. Plain gRPC stays HTTP/2.",
+    refs: ["crates/beegit-server/src/app.rs"], needs: [] },
+  { id: "B-WEB-4", phase: "pweb", area: "perf", priority: "P2", effort: "S", status: "todo", by: "claude",
+    title: "File sizes in <code>ListTree</code>",
+    detail: "Tree entries carry only mode and id. Add the blob size so the UI can pick highlight / render / truncate / download without fetching the file first, and show sizes in listings.",
+    refs: ["proto/beegit/v1/beegit.proto"], needs: [] },
+
+  // front end
+  { id: "B-WEB-5", phase: "pweb", area: "feature", priority: "P1", effort: "M", status: "todo", by: "claude",
+    title: "Scaffold <code>web/</code>: Vite + React + TypeScript + Connect-ES",
+    detail: "Generated clients from <code>beegit.proto</code> (<code>buf generate</code>, <code>protoc-gen-es</code>), gRPC-Web transport, TanStack Router/Query (immutable ids → cache never invalidates), layout, light/dark theme, <code>npm run dev</code> proxying <code>/beegit.v1.*</code> to <code>scripts/start.sh</code>, CI build.",
+    refs: ["web/"], needs: ["B-WEB-3"] },
+  { id: "B-WEB-6", phase: "pweb", area: "feature", priority: "P1", effort: "L", status: "todo", by: "claude",
+    title: "Repository home, tree browser and file viewer",
+    detail: "README rendered (sanitized Markdown, repo-relative links/images), breadcrumbs, virtualized directories, Shiki highlighting with line anchors, images inline, binary and large-file handling, raw download, copyable permalink to the resolved id.",
+    refs: [], needs: ["B-WEB-5", "B-WEB-4"] },
+  { id: "B-WEB-7", phase: "pweb", area: "feature", priority: "P1", effort: "M", status: "todo", by: "claude",
+    title: "History: log per ref and per path, revision picker",
+    detail: "Paginated <code>Log</code> (page tokens), first-parent toggle, author/date/message, <code>git:&lt;sha&gt;</code> aliases for imported commits, and a revision box accepting the full CLI grammar (<code>main~3</code>, <code>ref@v</code>, id prefixes) via <code>Resolve</code>.",
+    refs: [], needs: ["B-WEB-5"] },
+  { id: "B-WEB-8", phase: "pweb", area: "feature", priority: "P1", effort: "L", status: "todo", by: "claude",
+    title: "Changeset page with unified and split diffs",
+    detail: "Metadata, parents, change id, file list with stats; streamed <code>Diff</code> with content hunks; unified/split toggle, collapsed large or binary files, word-level highlights, links to file-at-revision and blame.",
+    refs: [], needs: ["B-WEB-5"] },
+  { id: "B-WEB-9", phase: "pweb", area: "feature", priority: "P2", effort: "S", status: "todo", by: "claude",
+    title: "Refs page and ref log",
+    detail: "All refs with tip, version and last update; per ref the <code>GetRefLog</code> history (who moved it, when, from what to what, which changesets landed).",
+    refs: [], needs: ["B-WEB-1", "B-WEB-5"] },
+  { id: "B-WEB-10", phase: "pweb", area: "feature", priority: "P2", effort: "M", status: "todo", by: "claude",
+    title: "Blame view",
+    detail: "Server-side <code>Blame</code> rendered next to the highlighted file, grouped by changeset, with age shading and \"blame before this change\" navigation.",
+    refs: [], needs: ["B-WEB-6"] },
+  { id: "B-WEB-11", phase: "pweb", area: "feature", priority: "P2", effort: "M", status: "todo", by: "claude",
+    title: "Compare two revisions",
+    detail: "<code>/compare/a...b</code>: merge base via <code>MergeBase</code>, the changesets in between, and the combined diff.",
+    refs: [], needs: ["B-WEB-8"] },
+  { id: "B-WEB-12", phase: "pweb", area: "security", priority: "P1", effort: "M", status: "todo", by: "claude",
+    title: "Login UI and access-aware rendering",
+    detail: "Sign in/out, account page (<code>WhoAmI</code>, groups), session expiry handling. Redacted blobs as placeholders, restricted subtrees with a lock, filtered changesets marked \"some paths hidden\" — never more than the ACL allows.",
+    refs: [], needs: ["B-WEB-2", "B-WEB-5"] },
+  { id: "B-WEB-13", phase: "pweb", area: "ops", priority: "P1", effort: "M", status: "todo", by: "claude",
+    title: "Deploy: <code>beegit-web</code> on NodePort 32101",
+    detail: "nginx image with the built SPA, pushed to ACR by <code>scripts/deploy-k3s.sh</code>; <code>deploy/k3s/beegit-web.yaml</code>; tunnel rules on one hostname: <code>path: ^/beegit\\.v1\\.</code> → 32100, everything else → 32101. The CLI is unaffected (it only uses <code>/beegit.v1.*</code>).",
+    refs: ["deploy/k3s/", "scripts/deploy-k3s.sh"], needs: ["B-WEB-5"] },
+  { id: "B-WEB-14", phase: "pweb", area: "quality", priority: "P1", effort: "M", status: "todo", by: "claude",
+    title: "Tests: Vitest + Playwright end to end",
+    detail: "Playwright against the local stack with an imported fixture repo (browse → file → blame → changeset → compare, plus restricted/redacted/anonymous cases); the same suite as a post-deploy smoke test through Cloudflare.",
+    refs: [], needs: ["B-WEB-6", "B-WEB-8"] },
+  { id: "B-WEB-15", phase: "pweb", area: "feature", priority: "P2", effort: "M", status: "todo", by: "bart",
+    title: "Repositories overview",
+    detail: "Landing page listing every repository the viewer can read, with default ref, last change and activity. Shows the single configured repo until multi-repo support lands; URLs already carry the repo name.",
+    refs: [], needs: ["B-FEAT-5", "B-WEB-6"] },
+  { id: "B-WEB-16", phase: "pweb", area: "feature", priority: "P3", effort: "S", status: "idea", by: "claude",
+    title: "Keyboard navigation and file finder",
+    detail: "<code>t</code> fuzzy file finder over the tree, <code>y</code> permalink, <code>b</code> blame, <code>l</code> log, <code>.</code> jump to parent directory.",
+    refs: [], needs: ["B-WEB-6"] },
+  { id: "B-WEB-17", phase: "pweb", area: "feature", priority: "P3", effort: "M", status: "idea", by: "claude",
+    title: "Admin pages: redactions and access checks",
+    detail: "For admins: <code>ListRedactions</code> with reasons and purge schedule, unredact, and \"what can principal X see\" via <code>CheckAccess</code>.",
+    refs: [], needs: ["B-WEB-12"] },
+  { id: "B-WEB-18", phase: "pweb", area: "feature", priority: "P3", effort: "M", status: "idea", by: "claude",
+    title: "Public read-only browsing",
+    detail: "An anonymous principal with read on chosen paths, so selected code can be browsed without an account (every RPC requires a token today).",
+    refs: ["crates/beegit-policy"], needs: ["B-WEB-12"] },
+  { id: "B-WEB-19", phase: "pweb", area: "feature", priority: "P3", effort: "L", status: "idea", by: "claude",
+    title: "Edit and commit from the browser",
+    detail: "Edit a file, preview the diff, commit (<code>UploadObjects</code> + <code>CreateChangeset</code>) and land — server-side writes make this possible without a working copy. Basis for review (B-FEAT-3).",
+    refs: [], needs: ["B-WEB-8", "B-WEB-12"] },
+
+  // ---------------------------------------------------------------- Phase 4
   { id: "B-FEAT-1", phase: "p3", area: "feature", priority: "P1", effort: "XL", status: "idea", by: "claude",
     title: "Git gateway (smart HTTP clone/fetch/push)",
     detail: "Let unmodified git clients, IDEs and existing CI talk to BeeGit. A detailed draft design already exists (Addendum G); pushes become changesets and <code>refs/for/&lt;ref&gt;</code> lands lock-free.",
     refs: ["docs/git-gateway.md"] },
-  { id: "B-FEAT-2", phase: "p3", area: "feature", priority: "P2", effort: "L", status: "idea", by: "claude",
-    title: "Web UI: browse trees, history, diffs, blame",
-    detail: "A small web front end over the existing query RPCs (gRPC-web or a thin HTTP/JSON gateway), respecting the same ACLs.",
-    refs: [] },
   { id: "B-FEAT-3", phase: "p3", area: "feature", priority: "P2", effort: "XL", status: "idea", by: "claude",
     title: "Lightweight review: proposals on changesets",
-    detail: "Open a proposal for a stack, comment on diff lines, approve, then land. Stable <code>change_id</code>s make iterating on a stack (amend) natural.",
+    detail: "Open a proposal for a stack, comment on diff lines, approve, then land. Stable <code>change_id</code>s make iterating on a stack (amend) natural. Builds on the web UI's changeset and diff pages (B-WEB-8).",
     refs: [] },
   { id: "B-FEAT-7", phase: "p3", area: "feature", priority: "P1", effort: "M", status: "idea", by: "claude",
     title: "MCP server for coding agents",
     detail: "Expose checkout/read/diff/commit/land/log as MCP tools, so agents can work against BeeGit without a full working copy (server-side reads and writes are exactly what agents need).",
     refs: [] },
-  { id: "B-FEAT-5", phase: "p3", area: "feature", priority: "P2", effort: "L", status: "idea", by: "claude",
+  { id: "B-FEAT-5", phase: "p3", area: "feature", priority: "P1", effort: "L", status: "todo", by: "claude",
     title: "Multiple repositories per server",
-    detail: "Storage is already keyed by <code>repo_id</code> first; the server is configured with a single <code>server.repo</code>. Add repo selection to the protocol and per-repo policies.",
+    detail: "Storage is already keyed by <code>repo_id</code> first; the server is configured with a single <code>server.repo</code>. Add repo selection to the protocol and per-repo policies. Needed for the web UI's repositories overview (B-WEB-15).",
     refs: ["crates/beegit-store-crdb/src/migrations.rs"] },
 
   // ---------------------------------------------------------------- Later / ideas (upstream's deferred list)
@@ -337,9 +424,9 @@ function render() {
     const all = TASKS.filter(t => t.phase === p.id);
     const done = all.filter(t => t.status === "done").length;
     return `<section class="phase"><h2>${esc(p.title)} <small>${done}/${all.length} done</small></h2>
-      <p>${esc(p.blurb)}</p>
+      <p>${esc(p.blurb)}${p.doc ? ` <a href="${esc(p.doc.href)}">${esc(p.doc.label)}</a>` : ""}</p>
       ${items.length ? items.map(t => `
-        <article class="task ${t.status === "done" ? "is-done" : ""}">
+        <article class="task ${t.status === "done" ? "is-done" : ""}" id="${esc(t.id)}">
           <div class="id">${esc(t.id)}</div>
           <h3>${t.title}</h3>
           <div class="meta">
@@ -349,7 +436,7 @@ function render() {
             <span class="tag">${esc(t.area)}</span>
           </div>
           <div class="detail">${t.detail}</div>
-          ${(t.refs && t.refs.length) || t.by ? `<div class="refs">${(t.refs || []).map(r => `<code>${esc(r)}</code>`).join("")}${t.by ? `<span>· proposed by ${esc(t.by)}</span>` : ""}</div>` : ""}
+          ${(t.refs && t.refs.length) || t.by || (t.needs && t.needs.length) ? `<div class="refs">${(t.refs || []).map(r => `<code>${esc(r)}</code>`).join("")}${t.needs && t.needs.length ? `<span>needs ${t.needs.map(n => `<a href="#${esc(n)}">${esc(n)}</a>`).join(", ")}</span>` : ""}${t.by ? `<span>· proposed by ${esc(t.by)}</span>` : ""}</div>` : ""}
         </article>`).join("") : `<p class="empty">No tasks match the filters.</p>`}
     </section>`;
   }).join("");

@@ -8,3 +8,5 @@ Recreate it with clear documentation, and with a plan/task (in html) with improv
 
 TO deploy to the vps (K3s), I added an example script from another project in /run/media/bart/Development/dev/bartbeecoders/BeeGit/scripts/deploy-k3s.sh
 I use cloudflare tunnels to expose the website. (I can use beegit.hideterms.com) Use internal ports 32100 and up
+
+Improve the plan by adding a web front end to the git repo. I want to have a full web overview of the repos, files, commits, logs etc

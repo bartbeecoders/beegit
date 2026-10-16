@@ -130,6 +130,7 @@ for pulling fixes from upstream Scion.
 | [Implementation-defined behaviour](docs/implementation-defined.md) | Choices the SPEC leaves open |
 | [Amendments](docs/contracts/amendments.md) | Every deviation from the frozen plan, incl. the fork (B-1) |
 | [Backup & retention](docs/operations/backup-retention.md) | Operational contract for backups |
+| [Web front end (design)](docs/web-ui.md) | Browser UI for repos, files, history, diffs, blame |
 | [Git gateway (draft)](docs/git-gateway.md) | Design for serving unmodified git clients |
 
 ## License
