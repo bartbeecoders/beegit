@@ -1,133 +1,167 @@
 # Deploying BeeGit on the K3s VPS
 
-Target: the VPS at `212.47.77.32` (`ssh bart@212.47.77.32`) running single-node K3s.
-Everything lives in the namespace `beegit`:
+Target: the VPS at `212.47.77.32` (`ssh bart@212.47.77.32`) running single-node K3s, exposed
+publicly through a Cloudflare Tunnel as **`https://beegit.hideterms.com`**.
+Everything lives in the namespace `beegit`, and one script does the work:
+[`scripts/deploy-k3s.sh`](../scripts/deploy-k3s.sh) (same structure as the BeeDocs script).
 
 ```text
-                      VPS 212.47.77.32 (K3s)
- beegit CLI ──TLS:7443──▶ ServiceLB ─▶ Deployment beegit-server ──▶ StatefulSet beegit-cockroach (PVC 10Gi)
-                                         (stateless, /readyz)  └──▶ StatefulSet beegit-minio     (PVC 20Gi)
+ beegit CLI ──HTTPS/gRPC──▶ Cloudflare edge ──tunnel──▶ cloudflared (VPS)
+            beegit.hideterms.com                          │ https, HTTP/2
+                                                          ▼
+                                         NodePort 32100 → Deployment beegit-server
+                                                          ├─▶ StatefulSet beegit-cockroach (PVC 10Gi)
+                                                          └─▶ StatefulSet beegit-minio     (PVC 20Gi)
 ```
 
-- `beegit-server` terminates TLS itself (gRPC/HTTP2), so it is exposed as a TCP
-  `LoadBalancer` Service on port **7443**. K3s's built-in ServiceLB binds that port on the node.
-  Traefik (ports 80/443) is not involved and keeps serving your other apps.
-- CockroachDB and MinIO are `ClusterIP` only; nothing but the server can reach them.
-- Storage uses K3s's default `local-path` provisioner (data under
-  `/var/lib/rancher/k3s/storage` on the VPS).
-- No container registry: `deploy.sh` streams the image over SSH into K3s's containerd.
+- **Ports.** BeeGit uses NodePorts from **32100** up: `32100` is gRPC. `32101+` are kept free for
+  later (web UI, git gateway). Nothing else is exposed: CockroachDB, MinIO and the metrics
+  listener are `ClusterIP` only.
+- **TLS.** Clients see Cloudflare's public certificate for `beegit.hideterms.com`, so they need
+  no private CA. Between cloudflared and the pod, the server still speaks TLS with a
+  certificate from BeeGit's private CA (`deploy/k3s/state/ca.pem`).
+- **Image.** Built with Podman and pushed to `beecodersregistry.azurecr.io/beegit`, pulled
+  with the existing `acr-secret` (copied into `beegit` on first deploy from another
+  namespace such as `beedocs`).
+- **Version.** `<workspace version>-<git sha>`, e.g. `0.1.0-92fae23`; a dirty tree adds
+  `-dirty-<timestamp>`. Each new tag rolls the server out by itself.
+- **Storage.** K3s's `local-path` provisioner (data under `/var/lib/rancher/k3s/storage`).
 
 ## 1. Prerequisites
 
-On your machine: Docker or Podman, `openssl`, SSH access to `bart@212.47.77.32`.
+Locally: `podman`, `ssh`, `openssl`, `git`, and push access to the ACR
+(`podman login beecodersregistry.azurecr.io`, or set `REGISTRY_USER`/`REGISTRY_PASSWORD`).
 
 On the VPS:
 
-- K3s with ServiceLB enabled (the default; check that `svclb` pods exist after deploy).
-- `bart` can run `sudo k3s kubectl` and `sudo k3s ctr`. If `sudo` asks for a password, either
-  allow these two commands with `NOPASSWD` in sudoers, or make the kubeconfig readable
-  (`write-kubeconfig-mode: "0644"` in `/etc/rancher/k3s/config.yaml`) and run with
-  `KUBECTL="k3s kubectl"`. Image import (`ctr`) always needs root.
-- Port **7443/tcp** open in the VPS firewall / cloud security group.
+- `bart` can run `kubectl`, or `sudo k3s kubectl` without a password prompt (the script uses
+  whichever works, like the BeeDocs script).
+- An `acr-secret` in one of `beedocs`, `beehosting`, `aidbooks`, `sqail`, `fietsloire`.
+- cloudflared running a tunnel you control (configuration lives outside this repo).
 - ~2 GiB free RAM (CockroachDB requests 768 MiB, limit 1.5 GiB) and ~30 GiB disk.
 
-Quick check:
+## 2. Cloudflare setup (once)
+
+1. **Ingress rule.** Add to the tunnel configuration (print it with
+   `./scripts/deploy-k3s.sh tunnel`):
+
+   ```yaml
+   - hostname: beegit.hideterms.com
+     service: https://localhost:32100
+     originRequest:
+       http2Origin: true     # gRPC needs HTTP/2 to the origin
+       noTLSVerify: true     # origin cert is signed by BeeGit's private CA
+   ```
+
+   If cloudflared runs somewhere other than the K3s node, use `https://<node-ip>:32100`.
+   For the dashboard-managed tunnel: Public Hostname → Service `HTTPS` `localhost:32100`,
+   and under Additional settings → TLS enable **HTTP2 connection** and **No TLS Verify**.
+   Stricter alternative to `noTLSVerify`: `originServerName: beegit-server` plus
+   `caPool: /path/to/ca.pem` (copy `deploy/k3s/state/ca.pem` to the cloudflared host).
+2. **Enable gRPC** for the `hideterms.com` zone: dashboard → Network → gRPC → On.
+   Without it Cloudflare will not pass gRPC requests through.
+3. **No Cloudflare Access on this hostname.** The CLI cannot complete an interactive SSO login;
+   BeeGit authenticates every call with its own tokens. (A later option is an Access
+   service-token header — not supported by the CLI yet.)
+
+Cloudflare limits that apply: a request body may be at most 100 MB on Free/Pro plans, which
+caps a single upload batch (the client batches uploads in 8 MiB batches by default, and
+`limits.max_blob_bytes` is 100 MiB), and responses must start within 100 s.
+
+## 3. Generate production secrets (once)
 
 ```sh
-ssh bart@212.47.77.32 'sudo k3s kubectl get nodes -o wide && sudo k3s kubectl get sc'
+./scripts/deploy-k3s.sh secrets     # = make k3s-secrets
 ```
 
-## 2. Generate production secrets (once)
-
-```sh
-BEEGIT_TLS_SANS="IP:212.47.77.32" make k3s-secrets
-# with a domain:  BEEGIT_TLS_SANS="IP:212.47.77.32,DNS:git.example.com" make k3s-secrets
-# extra admins:   BEEGIT_ADMINS="github:yourlogin" (requires a GitHub OAuth App, see below)
-```
-
-This writes `deploy/k3s/state/` (git-ignored, mode 0700): a private CA, the server certificate,
-the token-signing key, the `admin` service secret, random MinIO credentials and `acl.toml`.
+This writes `deploy/k3s/state/` (git-ignored, mode 0700): a private CA, the origin certificate,
+the token-signing key, the `admin` service secret, random MinIO credentials and `acl.toml`. It
+is idempotent: existing files are kept.
 **Back this directory up somewhere safe** (password manager or encrypted storage): losing the
-signing key logs everyone out; losing the S3 credentials means re-keying MinIO.
+signing key logs everyone out, losing the S3 credentials means re-keying MinIO, and the admin
+secret is your way in.
 
-To add SANs later, re-run with the new `BEEGIT_TLS_SANS` (the certificate is re-issued from the
-same CA, so clients keep working) and redeploy.
-
-## 3. Deploy
+## 4. Deploy
 
 ```sh
-make k3s-deploy        # = deploy/k3s/deploy.sh
+./scripts/deploy-k3s.sh             # all: secrets → build → push → deploy → status
 ```
 
-Steps performed:
+Individual steps:
 
-1. Build `beegit.local/beegit:<git-sha>` locally from the `Dockerfile`.
-2. `save | gzip | ssh … sudo k3s ctr images import -` (about 100 MB over the wire).
-3. Assemble a self-contained kustomization (manifests + `config/beegit-server.toml` +
-   `deploy/k3s/state`), stream it over SSH into a temporary directory, run
-   `sudo k3s kubectl apply -k`, delete the directory.
-4. Wait for the CockroachDB, MinIO and server rollouts.
+| Command | What it does |
+| --- | --- |
+| `build` | `podman build` → `beecodersregistry.azurecr.io/beegit:<version>` and `:latest` (~10 min cold) |
+| `push` | `podman login` + push both tags |
+| `deploy` | Namespace, `acr-secret`, then a kustomize bundle (manifests + `config/beegit-server.toml` + `deploy/k3s/state`) streamed over SSH into a temp dir, `kubectl apply -k`, temp dir removed; waits for the rollouts |
+| `status` | `kubectl get pods,svc,deploy,sts,pvc` |
+| `logs` | Last 80 server log lines |
+| `shell` | Shell in the server pod |
+| `login` | Prints the commands to log in as `admin` through the tunnel |
+| `smoke` | Runs `dev/smoke.sh` against `https://beegit.hideterms.com` |
+| `tunnel` | Prints the cloudflared ingress rule |
+| `bundle DIR` | Writes the bundle that `deploy` would apply, for inspection |
 
-Other commands:
+`push` and `deploy` reuse the version of the last `build`. Override any of: `VPS_IP`,
+`VPS_USER`, `REGISTRY`, `PUBLIC_HOST`, `APP_VERSION`.
+
+Config, policy and secrets are generated by kustomize with content hashes in their names, so
+changing `acl.toml`, `config/beegit-server.toml` or a secret and running `deploy` restarts the
+server with the new values.
+
+## 5. Connect
 
 ```sh
-make k3s-status                         # pods, services, PVCs, last server log lines
-deploy/k3s/deploy.sh apply              # re-apply manifests/config without rebuilding
-deploy/k3s/deploy.sh bundle /tmp/out    # write the rendered input locally to inspect it
-BEEGIT_SSH=user@host deploy/k3s/deploy.sh   # another server
-```
-
-Secrets and config are generated by kustomize with content hashes in their names, so any
-change to `acl.toml`, the config template or a secret triggers a rolling restart on `apply`.
-
-## 4. Connect
-
-```sh
-export BEEGIT_ENDPOINT=https://212.47.77.32:7443
-export BEEGIT_CA_FILE=$PWD/deploy/k3s/state/ca.pem
+export BEEGIT_ENDPOINT=https://beegit.hideterms.com
+unset BEEGIT_CA_FILE
 BEEGIT_SERVICE_SECRET="$(cat deploy/k3s/state/admin.secret)" beegit login --service admin
 beegit whoami
-dev/smoke.sh        # honours the exported BEEGIT_* variables; commits under smoke/
+./scripts/deploy-k3s.sh smoke      # commits a small file under smoke/ on main
 ```
 
-Hand `ca.pem` to every client (it is not secret). For CI or agents, add a service principal per
-consumer instead of sharing `admin`:
+Directly against the origin (bypassing Cloudflare, e.g. for debugging on the VPS):
+`BEEGIT_ENDPOINT=https://localhost:32100 BEEGIT_CA_FILE=ca.pem` — `localhost` is in the
+certificate's SANs.
 
-1. Pick a secret: `openssl rand -hex 32`; compute `printf %s "$SECRET" | sha256sum`.
-2. Add to `config/beegit-server.toml`:
+### More principals (CI, agents, colleagues)
+
+Give each consumer its own service principal instead of sharing `admin`:
+
+1. `SECRET=$(openssl rand -hex 32)`; `printf %s "$SECRET" | sha256sum`.
+2. In `config/beegit-server.toml` add
    ```toml
    [[auth.service_principals]]
    name = "ci"
    secret_sha256 = "$BEEGIT_CI_SECRET_SHA256"
    ```
-   and `BEEGIT_CI_SECRET_SHA256=<hash>` to `deploy/k3s/state/secrets.env`
-   (and `dev/state/secrets.env` for local).
-3. Grant `service:ci` in `deploy/k3s/state/acl.toml`, then `deploy/k3s/deploy.sh apply`.
+   and `BEEGIT_CI_SECRET_SHA256=<hash>` to `deploy/k3s/state/secrets.env` and
+   `dev/state/secrets.env` (the local stack reads the same config template).
+3. Grant `service:ci` in `deploy/k3s/state/acl.toml`, then `./scripts/deploy-k3s.sh deploy`.
 
 ### GitHub login for people
 
-Register a GitHub OAuth App (Settings → Developer settings → OAuth Apps) and enable
-**Device Flow**. Set its client id in `deploy/k3s/beegit-server.yaml`
-(`BEEGIT_GITHUB_CLIENT_ID`), add `github:<login>` entries to `acl.toml`, and apply.
-`beegit login` then shows a code to enter on github.com.
+Register a GitHub OAuth App (Settings → Developer settings → OAuth Apps) with **Device Flow**
+enabled. Set its client id in `deploy/k3s/beegit-server.yaml` (`BEEGIT_GITHUB_CLIENT_ID`), add
+`github:<login>` entries to `acl.toml`, and deploy. `beegit login` then shows a code to enter
+on github.com.
 
-## 5. Operations
+## 6. Operations
 
-| Task | Command (on your machine) |
+`kubectl` below means `kubectl` / `sudo k3s kubectl` on the VPS.
+
+| Task | Command |
 | --- | --- |
-| Logs | `ssh bart@212.47.77.32 sudo k3s kubectl -n beegit logs deploy/beegit-server -f` |
+| Logs | `./scripts/deploy-k3s.sh logs`, or `kubectl -n beegit logs deploy/beegit-server -f` |
 | Metrics / health | `kubectl -n beegit port-forward svc/beegit-server-admin 9464` → http://localhost:9464/metrics |
-| CockroachDB UI | `kubectl -n beegit port-forward svc/beegit-cockroach 8080` → http://localhost:8080 |
+| CockroachDB UI | `kubectl -n beegit port-forward svc/beegit-cockroach 8080` |
 | MinIO console | `kubectl -n beegit port-forward svc/beegit-minio 9001` (credentials in `state/s3.env`) |
 | SQL shell | `kubectl -n beegit exec -it beegit-cockroach-0 -- cockroach sql --insecure` |
 | Restart server | `kubectl -n beegit rollout restart deploy/beegit-server` |
 | Scale server | `kubectl -n beegit scale deploy/beegit-server --replicas=2` (stateless) |
-| Uninstall (keeps PVCs) | `kubectl delete -k <bundle>` or `kubectl -n beegit delete deploy,sts,svc --all` |
 | Wipe everything | `kubectl delete namespace beegit` (**deletes all repository data**) |
 
-(`kubectl` above = `sudo k3s kubectl` on the VPS. For `port-forward` from your laptop, copy the
-kubeconfig (`/etc/rancher/k3s/k3s.yaml`, server address changed to the VPS IP) or tunnel with
-`ssh -L 6443:127.0.0.1:6443 bart@212.47.77.32`.)
+To port-forward from your laptop, tunnel the API server first:
+`ssh -L 6443:127.0.0.1:6443 bart@212.47.77.32` with a copy of `/etc/rancher/k3s/k3s.yaml`.
 
 ### Backups
 
@@ -143,26 +177,22 @@ plus a copy of the MinIO bucket (`mc mirror`). Read
 [operations/backup-retention.md](operations/backup-retention.md) first: backups also retain
 purged (redacted) content, so they must expire within 30 days.
 
-## 6. Security notes and hardening
+## 7. Security notes
 
-The default deployment is meant for a single VPS and a small team. Known gaps, all tracked in
-the [plan](plan.html):
-
-- CockroachDB runs in `--insecure` mode (no TLS, no SQL auth) — reachable only inside the
-  cluster. Add a `NetworkPolicy` and/or secure mode with certificates (B-SEC-2).
-- The server certificate comes from a private CA. With a domain name you can use cert-manager +
-  Let's Encrypt instead, and clients need no `BEEGIT_CA_FILE` (B-OPS-3).
-- One CockroachDB node and one MinIO node: no redundancy. The PVCs live on the VPS disk.
-- The `admin` service principal is all-powerful; give each consumer its own principal and keep
+- Only the tunnel reaches the server; NodePort 32100 is also open on the node itself, so keep
+  it closed in the VPS firewall (only cloudflared on the host needs it).
+- CockroachDB runs in `--insecure` mode (no TLS, no SQL auth), reachable only inside the
+  cluster. Add a `NetworkPolicy` and secure mode (B-SEC-2).
+- One CockroachDB node and one MinIO node: no redundancy; data lives on the VPS disk.
+- The `admin` principal is all-powerful: give each consumer its own principal and keep
   `admin.secret` offline.
 
-## 7. Troubleshooting
+## 8. Troubleshooting
 
 | Symptom | Check |
 | --- | --- |
-| `beegit-server` stuck in `Init` | The init container waits for CockroachDB and MinIO readiness: `kubectl -n beegit get pods`, `describe pod`. |
-| `ImagePullBackOff` for `beegit.local/beegit` | The image import failed or the tag differs: `sudo k3s ctr images ls \| grep beegit`. |
-| Service `EXTERNAL-IP` `<pending>` | ServiceLB disabled or port 7443 already taken on the node. |
-| Client TLS error | Is the address you use in the cert? `openssl x509 -in deploy/k3s/state/tls.crt -noout -ext subjectAltName` |
-| Connection timeout | Firewall / security group for 7443/tcp. |
+| `beegit-server` stuck in `Init` | The init container waits for CockroachDB and MinIO: `kubectl -n beegit get pods`, `describe pod`. |
+| `ImagePullBackOff` | `acr-secret` present in `beegit`? Tag pushed? `kubectl -n beegit describe pod -l app=beegit-server` |
+| Client: `UNAVAILABLE` / 502 via Cloudflare | gRPC enabled on the zone? Ingress rule uses `https://` with `http2Origin: true` and `noTLSVerify`? Test the origin on the VPS: `curl -k --http2 -sv https://localhost:32100 2>&1 \| grep ALPN`. |
+| Client: `UNAUTHENTICATED` | Token expired (12h) — log in again. A Cloudflare Access policy on the hostname also causes this. |
 | CrashLoop with a config error | `kubectl -n beegit logs deploy/beegit-server --previous`; errors name the TOML key. |

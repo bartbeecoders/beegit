@@ -60,11 +60,11 @@ smoke: ## End-to-end smoke test against the running local server
 image: ## Build the container image $(IMAGE):$(TAG)
 	$(CONTAINER) build -t $(IMAGE):$(TAG) -t $(IMAGE):latest .
 
-k3s-secrets: ## Generate production secrets into deploy/k3s/state (set BEEGIT_TLS_SANS)
-	dev/gen-secrets.sh deploy/k3s/state
+k3s-secrets: ## Generate production secrets into deploy/k3s/state
+	scripts/deploy-k3s.sh secrets
 
-k3s-deploy: ## Build, ship and apply to the K3s VPS (see docs/deployment-k3s.md)
-	CONTAINER=$(CONTAINER) deploy/k3s/deploy.sh
+k3s-deploy: ## Build, push to ACR and deploy to the K3s VPS (see docs/deployment-k3s.md)
+	scripts/deploy-k3s.sh all
 
 k3s-status: ## Show the BeeGit pods on the K3s VPS
-	deploy/k3s/deploy.sh status
+	scripts/deploy-k3s.sh status

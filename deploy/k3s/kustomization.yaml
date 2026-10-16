@@ -1,7 +1,8 @@
 # BeeGit on K3s: CockroachDB + MinIO + beegit-server in namespace `beegit`.
 #
-# Secrets are generated from deploy/k3s/state (make k3s-secrets) and never committed.
-# deploy.sh streams this directory to the VPS and runs `k3s kubectl apply -k` there.
+# Secrets are generated from deploy/k3s/state (scripts/deploy-k3s.sh secrets) and never
+# committed. scripts/deploy-k3s.sh streams a bundle of this directory to the VPS and runs
+# `kubectl apply -k` there.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 namespace: beegit
@@ -14,13 +15,13 @@ resources:
 
 images:
   - name: beegit
-    newName: beegit.local/beegit
-    newTag: latest   # deploy.sh replaces this with the built tag
+    newName: beecodersregistry.azurecr.io/beegit
+    newTag: latest   # scripts/deploy-k3s.sh replaces this with the deployed version
 
 configMapGenerator:
   - name: beegit-config
     files:
-      - beegit-server.toml=bundle/beegit-server.toml   # deploy.sh copies config/ here
+      - beegit-server.toml=bundle/beegit-server.toml   # copied from config/ by scripts/deploy-k3s.sh
   - name: beegit-policy
     files:
       - acl.toml=state/acl.toml

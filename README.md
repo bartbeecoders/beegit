@@ -60,14 +60,15 @@ beegit-import --git /path/to/repo --ref HEAD --target-ref main --skip-submodules
 
 ## Deploy to the K3s VPS
 
+Public endpoint: **`https://beegit.hideterms.com`** (Cloudflare Tunnel → NodePort 32100).
+
 ```sh
-BEEGIT_TLS_SANS="IP:212.47.77.32" make k3s-secrets   # once: TLS, keys, admin secret, S3 creds
-make k3s-deploy                                     # build image → ssh import → kubectl apply
-make k3s-status
+./scripts/deploy-k3s.sh secrets   # once: origin TLS, signing key, admin secret, S3 creds
+./scripts/deploy-k3s.sh           # build → push to ACR → deploy → status
+./scripts/deploy-k3s.sh smoke     # end-to-end test through Cloudflare
 ```
 
-No registry is needed: the image is streamed over SSH into K3s's containerd.
-Full guide, firewall notes and hardening: [docs/deployment-k3s.md](docs/deployment-k3s.md).
+Tunnel ingress rule, gRPC setting and operations: [docs/deployment-k3s.md](docs/deployment-k3s.md).
 
 ## How it works
 
@@ -94,9 +95,10 @@ More: [docs/architecture.md](docs/architecture.md) and the full [SPEC.md](SPEC.m
 | `crates/` | The 23 Rust crates (see [architecture](docs/architecture.md#crate-map)) |
 | `proto/beegit/v1/` | gRPC protocol definition |
 | `config/beegit-server.toml` | Server config template; every environment fills it via `$ENV` vars |
+| `scripts/` | `start.sh` (local stack), `deploy-k3s.sh` (VPS), checks, benchmarks, `rebrand-upstream.sh` |
 | `dev/` | Local tooling: `gen-secrets.sh`, `env.sh`, `smoke.sh` (state goes to `dev/state/`, git-ignored) |
 | `docker/` | `compose.dev.yml` (local stack), `compose.test.yml` (external-backend tests) |
-| `deploy/k3s/` | Kustomize manifests and `deploy.sh` for the VPS |
+| `deploy/k3s/` | Kustomize manifests for the VPS (applied by `scripts/deploy-k3s.sh`) |
 | `Dockerfile` | One image with `beegit-server`, `beegit`, `beegit-daemon`, `beegit-import` |
 | `docs/` | Guides, contracts, the [plan](docs/plan.html), [upstream benchmarks](docs/upstream/benchmarks.md) |
 | `schemas/v1/` | JSON schemas for `beegit --json` output |

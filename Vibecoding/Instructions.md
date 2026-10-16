@@ -4,3 +4,7 @@ Create in the root folder /run/media/bart/Development/dev/bartbeecoders/BeeGit a
 Idea is to be able to run and test it locally and later deploy it to our VPS server (ssh bart@212.47.77.32) - this runs a K3S
 
 Recreate it with clear documentation, and with a plan/task (in html) with improvements (you can add some, I will add some later)
+
+
+TO deploy to the vps (K3s), I added an example script from another project in /run/media/bart/Development/dev/bartbeecoders/BeeGit/scripts/deploy-k3s.sh
+I use cloudflare tunnels to expose the website. (I can use beegit.hideterms.com) Use internal ports 32100 and up

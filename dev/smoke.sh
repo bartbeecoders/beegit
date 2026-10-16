@@ -4,7 +4,7 @@
 #
 #   dev/smoke.sh                       local server (make dev-up or make run-server)
 #   BEEGIT_ENDPOINT=https://host:7443 BEEGIT_CA_FILE=ca.pem \
-#   BEEGIT_SERVICE_SECRET=... dev/smoke.sh     any other server
+#   BEEGIT_SERVICE_SECRET=... dev/smoke.sh     any other server (BEEGIT_CA_FILE= for public certs)
 #
 # Uses a throw-away HOME so your real ~/.config/beegit credentials are untouched.
 set -euo pipefail
@@ -12,12 +12,14 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 
 # Defaults for the local stack; anything already exported wins.
 : "${BEEGIT_ENDPOINT:=https://localhost:7443}"
-: "${BEEGIT_CA_FILE:=$ROOT/dev/state/ca.pem}"
+# An explicitly empty BEEGIT_CA_FILE means "use the system roots" (e.g. behind Cloudflare).
+: "${BEEGIT_CA_FILE=$ROOT/dev/state/ca.pem}"
 : "${BEEGIT_SERVICE_NAME:=admin}"
 if [ -z "${BEEGIT_SERVICE_SECRET:-}" ]; then
   BEEGIT_SERVICE_SECRET="$(cat "$ROOT/dev/state/admin.secret")"
 fi
-export BEEGIT_ENDPOINT BEEGIT_CA_FILE BEEGIT_SERVICE_SECRET
+export BEEGIT_ENDPOINT BEEGIT_SERVICE_SECRET
+if [ -n "$BEEGIT_CA_FILE" ]; then export BEEGIT_CA_FILE; else unset BEEGIT_CA_FILE; fi
 
 BIN="${BEEGIT_BIN:-}"
 if [ -z "$BIN" ]; then

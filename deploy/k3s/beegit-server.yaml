@@ -1,15 +1,17 @@
-# beegit-server: stateless gRPC/TLS front end. It terminates TLS itself, so it is exposed as a
-# plain TCP LoadBalancer (K3s ServiceLB binds port 7443 on the node) instead of an Ingress.
+# beegit-server: stateless gRPC front end. It terminates TLS itself (private CA) and is exposed
+# on NodePort 32100; the Cloudflare Tunnel forwards https://beegit.hideterms.com there over
+# HTTP/2 (tunnel config is managed outside this repo; see docs/deployment-k3s.md).
+# Ports 32100+ are reserved for BeeGit on the VPS: 32100 gRPC, 32101+ future (web UI, git gateway).
 apiVersion: v1
 kind: Service
 metadata:
   name: beegit-server
   labels: { app: beegit-server }
 spec:
-  type: LoadBalancer
+  type: NodePort
   selector: { app: beegit-server }
   ports:
-    - { name: grpc, port: 7443, targetPort: 7443 }
+    - { name: grpc, port: 7443, targetPort: 7443, nodePort: 32100 }
 ---
 apiVersion: v1
 kind: Service
@@ -36,6 +38,8 @@ spec:
         prometheus.io/scrape: "true"
         prometheus.io/port: "9464"
     spec:
+      imagePullSecrets:
+        - name: acr-secret
       securityContext:
         runAsNonRoot: true
         runAsUser: 10001
