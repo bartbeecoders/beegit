@@ -1,10 +1,13 @@
 //! [`BeeGitClient`]: a `beegit.v1` client over a Unix socket or HTTPS (SPEC 7.1; P08).
 //!
 //! The transport stack of every generated client is
-//! `InterceptedService<EpochCapture<Channel>, BearerInterceptor>`:
+//! `InterceptedService<EpochCapture<Conn>, BearerInterceptor>`:
 //! - [`BearerInterceptor`] adds `authorization: Bearer <token>` (SPEC 7.1);
 //! - [`EpochCapture`] counts calls and records the epochs of the most recent response, read from
-//!   the trailers frame or, for trailers-only responses, from the headers (SPEC 7.1).
+//!   the trailers frame or, for trailers-only responses, from the headers (SPEC 7.1);
+//! - [`Conn`] is the HTTP/2 [`Channel`], either directly or, for a
+//!   [`Endpoint::GrpcWeb`] endpoint, behind tonic-web's gRPC-Web client translation, which
+//!   moves the status and trailers into the response body so proxies cannot drop them.
 
 use crate::endpoint::{Endpoint, TlsOptions};
 use crate::trailers::{Epochs, read_epochs};
@@ -54,15 +57,46 @@ pub(crate) struct ClientState {
     pub(crate) calls: std::sync::atomic::AtomicU64,
 }
 
+/// The HTTP-level connection under every generated client: the [`Channel`], plain gRPC or
+/// translated to gRPC-Web ([`Endpoint::GrpcWeb`]). Request and response bodies are always
+/// plain gRPC framing with real trailers, so the layers above do not care which it is.
+pub type Conn = tower::util::BoxCloneSyncService<
+    http::Request<tonic::body::Body>,
+    http::Response<tonic::body::Body>,
+    tonic::transport::Error,
+>;
+
 /// The transport stack used by every generated client of [`BeeGitClient`].
-pub type Transport = InterceptedService<EpochCapture<Channel>, BearerInterceptor>;
+pub type Transport = InterceptedService<EpochCapture<Conn>, BearerInterceptor>;
 
 /// A connected `beegit.v1` client (SPEC 7.1). Cheap to clone.
 #[derive(Clone)]
 pub struct BeeGitClient {
     channel: Channel,
+    conn: Conn,
+    grpc_web: bool,
     token: Option<Arc<str>>,
     state: Arc<ClientState>,
+}
+
+/// Wrap `channel` as a [`Conn`], translating to gRPC-Web when `grpc_web` is set.
+fn make_conn(channel: Channel, grpc_web: bool) -> Conn {
+    use tower::ServiceExt as _;
+    if !grpc_web {
+        return Conn::new(channel);
+    }
+    // tonic-web marks requests HTTP/1.1 (it targets browsers); the channel speaks HTTP/2 only,
+    // and gRPC-Web is valid over HTTP/2, so restore the version underneath it.
+    let h2 = channel.map_request(
+        |req: http::Request<tonic_web::GrpcWebCall<tonic::body::Body>>| {
+            let mut req = req.map(tonic::body::Body::new);
+            *req.version_mut() = http::Version::HTTP_2;
+            req
+        },
+    );
+    let web = tonic_web::GrpcWebClientService::new(h2)
+        .map_response(|res| res.map(tonic::body::Body::new));
+    Conn::new(web)
 }
 
 impl BearerInterceptor {
@@ -242,7 +276,8 @@ fn unavailable(ep: &Endpoint, e: &(dyn std::error::Error + 'static)) -> BeeGitEr
 /// A configured tonic endpoint plus, for Unix sockets, the socket path its connector dials.
 enum Prepared {
     Unix(tonic::transport::Endpoint, std::path::PathBuf),
-    Https(tonic::transport::Endpoint),
+    /// The endpoint and whether calls use gRPC-Web.
+    Https(tonic::transport::Endpoint, bool),
 }
 
 /// A connector dialing the Unix socket at `path` (the URI is ignored).
@@ -275,7 +310,8 @@ fn prepare(ep: &Endpoint, tls: Option<TlsOptions>) -> Result<Prepared> {
                 .http2_max_header_list_size(MAX_HEADER_LIST_BYTES),
             path.clone(),
         )),
-        Endpoint::Https(url) => {
+        Endpoint::Https(url) | Endpoint::GrpcWeb(url) => {
+            let grpc_web = matches!(ep, Endpoint::GrpcWeb(_));
             let tls = tls.unwrap_or_default();
             let mut cfg = ClientTlsConfig::new();
             cfg = match tls.ca_pem {
@@ -296,15 +332,17 @@ fn prepare(ep: &Endpoint, tls: Option<TlsOptions>) -> Result<Prepared> {
                 .http2_max_header_list_size(MAX_HEADER_LIST_BYTES)
                 .tls_config(cfg)
                 .map_err(|e| unavailable(ep, &e))?;
-            Ok(Prepared::Https(endpoint))
+            Ok(Prepared::Https(endpoint, grpc_web))
         }
     }
 }
 
 impl BeeGitClient {
-    fn from_channel(channel: Channel, token: Option<String>) -> Self {
+    fn from_channel(channel: Channel, grpc_web: bool, token: Option<String>) -> Self {
         BeeGitClient {
+            conn: make_conn(channel.clone(), grpc_web),
             channel,
+            grpc_web,
             token: token.map(Arc::from),
             state: Arc::new(ClientState::default()),
         }
@@ -321,14 +359,16 @@ impl BeeGitClient {
         tls: Option<TlsOptions>,
         token: Option<String>,
     ) -> Result<Self> {
-        let channel = match prepare(ep, tls)? {
-            Prepared::Unix(e, path) => e
-                .connect_with_connector(unix_connector(path))
-                .await
-                .map_err(|e| unavailable(ep, &e))?,
-            Prepared::Https(e) => e.connect().await.map_err(|e| unavailable(ep, &e))?,
+        let (channel, grpc_web) = match prepare(ep, tls)? {
+            Prepared::Unix(e, path) => (
+                e.connect_with_connector(unix_connector(path))
+                    .await
+                    .map_err(|e| unavailable(ep, &e))?,
+                false,
+            ),
+            Prepared::Https(e, web) => (e.connect().await.map_err(|e| unavailable(ep, &e))?, web),
         };
-        Ok(Self::from_channel(channel, token))
+        Ok(Self::from_channel(channel, grpc_web, token))
     }
 
     /// Like [`BeeGitClient::connect`], but performs no I/O: the connection is established on
@@ -341,11 +381,11 @@ impl BeeGitClient {
         tls: Option<TlsOptions>,
         token: Option<String>,
     ) -> Result<Self> {
-        let channel = match prepare(ep, tls)? {
-            Prepared::Unix(e, path) => e.connect_with_connector_lazy(unix_connector(path)),
-            Prepared::Https(e) => e.connect_lazy(),
+        let (channel, grpc_web) = match prepare(ep, tls)? {
+            Prepared::Unix(e, path) => (e.connect_with_connector_lazy(unix_connector(path)), false),
+            Prepared::Https(e, web) => (e.connect_lazy(), web),
         };
-        Ok(Self::from_channel(channel, token))
+        Ok(Self::from_channel(channel, grpc_web, token))
     }
 
     /// The same connection with a different bearer token. Epoch capture and the call counter
@@ -353,6 +393,8 @@ impl BeeGitClient {
     pub fn with_token(&self, token: Option<String>) -> Self {
         BeeGitClient {
             channel: self.channel.clone(),
+            conn: self.conn.clone(),
+            grpc_web: self.grpc_web,
             token: token.map(Arc::from),
             state: self.state.clone(),
         }
@@ -361,7 +403,7 @@ impl BeeGitClient {
     fn transport(&self) -> Transport {
         InterceptedService::new(
             EpochCapture {
-                inner: self.channel.clone(),
+                inner: self.conn.clone(),
                 state: self.state.clone(),
             },
             BearerInterceptor {
@@ -421,9 +463,21 @@ impl BeeGitClient {
         self.state.calls.store(0, Ordering::Relaxed);
     }
 
-    /// The underlying channel.
+    /// The underlying HTTP/2 channel. Calls made on it directly bypass the gRPC-Web
+    /// translation of a [`Endpoint::GrpcWeb`] client; use [`BeeGitClient::conn`] to forward raw
+    /// requests through the configured transport.
     pub fn channel(&self) -> Channel {
         self.channel.clone()
+    }
+
+    /// The connection the generated clients use (plain gRPC or gRPC-Web), for raw requests.
+    pub fn conn(&self) -> Conn {
+        self.conn.clone()
+    }
+
+    /// Whether calls are framed as gRPC-Web ([`Endpoint::GrpcWeb`]).
+    pub fn is_grpc_web(&self) -> bool {
+        self.grpc_web
     }
 
     /// The bearer token this client sends, if any (SPEC 7.1).

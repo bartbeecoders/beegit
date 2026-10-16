@@ -259,6 +259,48 @@ async fn commands_work_through_the_daemon_endpoint() {
     assert!(flag.text().contains(" via daemon"), "{}", flag.text());
 }
 
+/// The whole write path (upload, commit, land) and reads over a `grpc-web+https://` endpoint,
+/// the transport used behind proxies that drop HTTP/2 trailers (Cloudflare Tunnel).
+#[tokio::test(flavor = "multi_thread")]
+async fn commands_work_over_grpc_web() {
+    let h = Harness::start(false).await;
+    let mut env = h.env_as("alice");
+    let web = format!("grpc-web+{}", h.endpoint);
+    env.0.insert("BEEGIT_ENDPOINT".into(), web.clone());
+    let who = beegit(&env, &["--json", "whoami"]).await;
+    assert_eq!(who.code, 0, "{}", who.stderr);
+    assert_eq!(who.json()["data"]["endpoint"].as_str().unwrap(), web);
+    let wc = h.path("wc");
+    let wcs = wc.to_str().unwrap();
+    let co = beegit(&env, &["checkout", "main", wcs]).await;
+    assert_eq!(co.code, 0, "{}", co.stderr);
+    std::fs::create_dir_all(wc.join("d")).unwrap();
+    std::fs::write(wc.join("d/f.txt"), b"via grpc-web\n").unwrap();
+    let c = beegit(&env, &["-C", wcs, "commit", "-m", "via grpc-web"]).await;
+    assert_eq!(c.code, 0, "{}", c.stderr);
+    let l = beegit(&env, &["-C", wcs, "land", "--ref", "main"]).await;
+    assert_eq!(l.code, 0, "{}", l.stderr);
+    let cat = beegit(&env, &["cat", "main:d/f.txt"]).await;
+    assert_eq!(cat.code, 0, "{}", cat.stderr);
+    assert_eq!(cat.stdout, b"via grpc-web\n");
+    let log = beegit(&env, &["log", "d/f.txt", "--oneline"]).await;
+    assert_eq!(log.code, 0, "{}", log.stderr);
+    assert!(log.text().contains(" via grpc-web"), "{}", log.text());
+    // Errors keep their code: NOT_FOUND exits 1 with the typed message.
+    let missing = beegit(&env, &["cat", "main:nope.txt"]).await;
+    assert_eq!(missing.code, 1);
+    assert!(missing.stderr.contains("NOT_FOUND"), "{}", missing.stderr);
+    // A sparse checkout streams objects over the same transport.
+    let sp = h.path("sparse");
+    let sps = sp.to_str().unwrap();
+    let co2 = beegit(&env, &["checkout", "main", sps, "--sparse", "d"]).await;
+    assert_eq!(co2.code, 0, "{}", co2.stderr);
+    assert_eq!(
+        std::fs::read(sp.join("d/f.txt")).unwrap(),
+        b"via grpc-web\n"
+    );
+}
+
 #[tokio::test(flavor = "multi_thread")]
 async fn status_and_diff_work_offline_when_trees_are_cached() {
     // SPEC 11.5 (amendment W6-1): `status` makes no server call when every needed tree is

@@ -53,6 +53,12 @@ See SPEC §4 (domain model), §5 (storage), §8 (write path), §9 (derived data)
 Every response carries `beegit-policy-epoch`, `beegit-redaction-epoch` and `beegit-tier`
 trailers so caches can tell when to invalidate.
 
+**Transports.** The server accepts plain gRPC and gRPC-Web on the same port (tonic-web is the
+outermost layer of every service). Clients pick with the endpoint scheme: `https://` for gRPC,
+`grpc-web+https://` for gRPC-Web, which carries the status and trailers in the response body
+and therefore survives proxies that drop HTTP/2 trailers (Cloudflare Tunnel). See
+`beegit-proto/src/client.rs` (`Conn`) and amendment B-2.
+
 ## Crate map
 
 Dependencies only point downward; `scripts/check-layers.sh` enforces the table in

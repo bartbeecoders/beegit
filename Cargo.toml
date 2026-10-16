@@ -81,6 +81,7 @@ pin-project-lite = "=0.2.17"
 tonic = { version = "=0.14.6", features = ["transport", "tls-ring", "tls-native-roots", "codegen", "router", "server", "channel"] }
 tonic-prost = "=0.14.6"
 tonic-prost-build = "=0.14.6"
+tonic-web = "=0.14.6"
 prost = "=0.14.4"
 prost-types = "=0.14.4"
 tower = { version = "=0.5.3", features = ["limit", "load-shed", "util", "timeout"] }

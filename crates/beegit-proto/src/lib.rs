@@ -35,9 +35,9 @@ mod status;
 mod trailers;
 
 pub use client::{
-    BearerInterceptor, BeeGitClient, CaptureBody, CaptureFuture, EpochCapture, Transport,
+    BearerInterceptor, BeeGitClient, CaptureBody, CaptureFuture, Conn, EpochCapture, Transport,
 };
-pub use endpoint::{Endpoint, TlsOptions};
+pub use endpoint::{Endpoint, GRPC_WEB_SCHEME, TlsOptions};
 pub use status::{error_from_status, status_from_error, tonic_code};
 pub use trailers::{
     EpochBody, EpochFuture, EpochSource, EpochTrailerLayer, EpochTrailerService, Epochs,

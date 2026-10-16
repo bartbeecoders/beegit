@@ -36,6 +36,7 @@ beegit-obs = { workspace = true }
 beegit-proto = { workspace = true }
 tonic = { workspace = true }
 tonic-prost = { workspace = true }
+tonic-web = { workspace = true }
 prost = { workspace = true }
 tower = { workspace = true }
 tower-layer = { workspace = true }

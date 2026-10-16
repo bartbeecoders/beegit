@@ -4,6 +4,9 @@
 //! bootstraps the repository and starts the background tasks. [`ServerApp::router`] wraps each
 //! of the six `beegit.v1` services in the layer stack (outermost first):
 //!
+//! 0. gRPC-Web translation (tonic-web): `application/grpc-web` requests become plain gRPC for
+//!    the layers below and their responses, trailers included, are re-encoded into the body;
+//!    plain HTTP/2 gRPC passes through untouched,
 //! 1. request id ([`crate::interceptor::RequestIdService`]),
 //! 2. [`EpochTrailerLayer`] with the [`AppContext`] as epoch source, so every response,
 //!    including rejections by the layers below, carries the three SPEC 7.1 trailers,
@@ -580,6 +583,7 @@ impl Stack {
             .layer(s)
             .map_response(|r: http::Response<_>| r.map(tonic::body::Body::new));
         let s = BoxCloneSyncService::new(RequestIdService::new(BoxCloneSyncService::new(s)));
+        let s = BoxCloneSyncService::new(tonic_web::GrpcWebLayer::new().layer(s));
         Layered {
             inner: s,
             _named: PhantomData,

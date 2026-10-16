@@ -1,7 +1,8 @@
 # Deploying BeeGit on the K3s VPS
 
 Target: the VPS at `212.47.77.32` (`ssh bart@212.47.77.32`) running single-node K3s, exposed
-publicly through a Cloudflare Tunnel as **`https://beegit.hideterms.com`**.
+publicly through a Cloudflare Tunnel as **`beegit.hideterms.com`**. Clients connect with the
+endpoint **`grpc-web+https://beegit.hideterms.com`** (see "Why gRPC-Web" below).
 Everything lives in the namespace `beegit`, and one script does the work:
 [`scripts/deploy-k3s.sh`](../scripts/deploy-k3s.sh) (same structure as the BeeDocs script).
 
@@ -17,6 +18,11 @@ Everything lives in the namespace `beegit`, and one script does the work:
 - **Ports.** BeeGit uses NodePorts from **32100** up: `32100` is gRPC. `32101+` are kept free for
   later (web UI, git gateway). Nothing else is exposed: CockroachDB, MinIO and the metrics
   listener are `ClusterIP` only.
+- **Why gRPC-Web.** Plain gRPC reports each call's final status in HTTP/2 *trailers*, and
+  Cloudflare Tunnel public hostnames drop trailers: the body arrives but the status does not,
+  and every call fails with `missing grpc-status trailer`. gRPC-Web puts the status (and
+  BeeGit's `beegit-*` epoch trailers) inside the response body instead. The server accepts both
+  on the same port, so in-cluster clients and the daemon can keep using plain gRPC.
 - **TLS.** Clients see Cloudflare's public certificate for `beegit.hideterms.com`, so they need
   no private CA. Between cloudflared and the pod, the server still speaks TLS with a
   certificate from BeeGit's private CA (`deploy/k3s/state/ca.pem`).
@@ -112,15 +118,18 @@ server with the new values.
 ## 5. Connect
 
 ```sh
-export BEEGIT_ENDPOINT=https://beegit.hideterms.com
+export BEEGIT_ENDPOINT=grpc-web+https://beegit.hideterms.com
 unset BEEGIT_CA_FILE
 BEEGIT_SERVICE_SECRET="$(cat deploy/k3s/state/admin.secret)" beegit login --service admin
 beegit whoami
 ./scripts/deploy-k3s.sh smoke      # commits a small file under smoke/ on main
 ```
 
-Directly against the origin (bypassing Cloudflare, e.g. for debugging on the VPS):
-`BEEGIT_ENDPOINT=https://localhost:32100 BEEGIT_CA_FILE=ca.pem` — `localhost` is in the
+The same scheme works everywhere an endpoint is accepted: `--endpoint`, the CLI config files,
+`beegit-import --endpoint`, and a daemon's `upstream`.
+
+Directly against the origin (bypassing Cloudflare, e.g. for debugging on the VPS), plain gRPC
+works: `BEEGIT_ENDPOINT=https://localhost:32100 BEEGIT_CA_FILE=ca.pem` — `localhost` is in the
 certificate's SANs.
 
 ### More principals (CI, agents, colleagues)
@@ -193,6 +202,7 @@ purged (redacted) content, so they must expire within 30 days.
 | --- | --- |
 | `beegit-server` stuck in `Init` | The init container waits for CockroachDB and MinIO: `kubectl -n beegit get pods`, `describe pod`. |
 | `ImagePullBackOff` | `acr-secret` present in `beegit`? Tag pushed? `kubectl -n beegit describe pod -l app=beegit-server` |
+| `missing grpc-status trailer` | You used `https://` through Cloudflare; use `grpc-web+https://beegit.hideterms.com`. |
 | Client: `UNAVAILABLE` / 502 via Cloudflare | gRPC enabled on the zone? Ingress rule uses `https://` with `http2Origin: true` and `noTLSVerify`? Test the origin on the VPS: `curl -k --http2 -sv https://localhost:32100 2>&1 \| grep ALPN`. |
 | Client: `UNAUTHENTICATED` | Token expired (12h) — log in again. A Cloudflare Access policy on the hostname also causes this. |
 | CrashLoop with a config error | `kubectl -n beegit logs deploy/beegit-server --previous`; errors name the TOML key. |

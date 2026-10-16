@@ -23,12 +23,9 @@ pub struct Harness {
     pub endpoint: String,
 }
 
-/// The text form of an endpoint (`unix:///...` or `https://...`).
+/// The text form of an endpoint (`unix:///...`, `https://...` or `grpc-web+https://...`).
 pub fn endpoint_text(ep: &Endpoint) -> String {
-    match ep {
-        Endpoint::Unix(p) => format!("unix://{}", p.display()),
-        Endpoint::Https(u) => u.clone(),
-    }
+    ep.to_string()
 }
 
 impl Harness {

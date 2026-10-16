@@ -14,10 +14,7 @@ use std::path::Path;
 use std::process::Output;
 
 fn endpoint_text(ep: &Endpoint) -> String {
-    match ep {
-        Endpoint::Unix(p) => format!("unix://{}", p.display()),
-        Endpoint::Https(u) => u.clone(),
-    }
+    ep.to_string()
 }
 
 async fn run(args: Vec<String>, envs: Vec<(&'static str, String)>) -> Output {

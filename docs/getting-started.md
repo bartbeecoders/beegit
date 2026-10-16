@@ -111,6 +111,9 @@ beegit blame hello.txt
 beegit sparse --help              # change the sparse profile later
 ```
 
+Endpoints: `https://host:port` (gRPC), `grpc-web+https://host` (gRPC-Web, for proxies such as
+Cloudflare Tunnel that drop HTTP/2 trailers) or `unix:///path` (a local daemon).
+
 Every command supports `--json`, printing one line `{"schema":"beegit.cli.<cmd>.v1","data":…}`
 (schemas in [`schemas/v1`](../schemas/v1)). Exit codes: 0 ok, 1 error, 2 usage, 3 conflicts,
 4 refused because of dirty files.

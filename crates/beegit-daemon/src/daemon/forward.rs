@@ -143,7 +143,7 @@ pub(crate) async fn forward(inner: Arc<Inner>, req: http::Request<Body>) -> http
         }
     };
     inner.count_upstream();
-    let mut ch = client.channel();
+    let mut ch = client.conn();
     let res = match ch.ready().await {
         Ok(ch) => ch.call(req).await,
         Err(e) => Err(e),

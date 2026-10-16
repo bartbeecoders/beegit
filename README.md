@@ -18,7 +18,7 @@ list of changes.
 | **Status** | v0.1, single repository per server, Linux/macOS clients |
 | **Language** | Rust 1.98 (pinned), 23 crates, ~130k lines incl. tests |
 | **Storage** | CockroachDB (metadata) + any S3-compatible store (objects), e.g. MinIO |
-| **Protocol** | gRPC over TLS (`beegit.v1`), BLAKE3 object ids, zstd compression |
+| **Protocol** | gRPC or gRPC-Web over TLS (`beegit.v1`), BLAKE3 object ids, zstd compression |
 | **Roadmap** | [docs/plan.html](docs/plan.html) — improvements and tasks |
 
 ## Quick start (local, about 5 minutes)
@@ -60,7 +60,8 @@ beegit-import --git /path/to/repo --ref HEAD --target-ref main --skip-submodules
 
 ## Deploy to the K3s VPS
 
-Public endpoint: **`https://beegit.hideterms.com`** (Cloudflare Tunnel → NodePort 32100).
+Public endpoint: **`grpc-web+https://beegit.hideterms.com`** (Cloudflare Tunnel → NodePort 32100;
+gRPC-Web because the tunnel drops the HTTP/2 trailers plain gRPC needs).
 
 ```sh
 ./scripts/deploy-k3s.sh secrets   # once: origin TLS, signing key, admin secret, S3 creds

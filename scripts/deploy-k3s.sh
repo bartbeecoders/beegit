@@ -7,10 +7,12 @@ set -euo pipefail
 # Builds and pushes the BeeGit image, then deploys it to K3S on the VPS.
 #
 # Architecture (namespace: beegit):
-#   • beegit-server     Stateless gRPC server (TLS with BeeGit's private CA).
+#   • beegit-server     Stateless gRPC + gRPC-Web server (TLS with BeeGit's private CA).
 #                       NodePort 32100 — Cloudflare Tunnel forwards
 #                       https://beegit.hideterms.com here over HTTP/2
-#                       (tunnel config managed outside this repo).
+#                       (tunnel config managed outside this repo). Clients use
+#                       grpc-web+https://beegit.hideterms.com, because the tunnel
+#                       drops the HTTP/2 trailers that plain gRPC relies on.
 #   • beegit-cockroach  CockroachDB, single node, metadata (PVC 10Gi). ClusterIP only.
 #   • beegit-minio      MinIO, object bytes (PVC 20Gi). ClusterIP only.
 #
@@ -59,7 +61,9 @@ NAMESPACE="beegit"
 IMAGE="$REGISTRY/beegit"
 NODE_PORT=32100
 PUBLIC_HOST="${PUBLIC_HOST:-beegit.hideterms.com}"
-PUBLIC_ENDPOINT="https://$PUBLIC_HOST"
+# Cloudflare Tunnel public hostnames drop HTTP/2 trailers, which plain gRPC needs for its
+# status; gRPC-Web carries the status in the body, so clients use the grpc-web+https scheme.
+PUBLIC_ENDPOINT="grpc-web+https://$PUBLIC_HOST"
 
 # VPS target (override via environment variables).
 VPS_IP="${VPS_IP:-212.47.77.32}"

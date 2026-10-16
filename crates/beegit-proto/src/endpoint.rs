@@ -3,6 +3,9 @@
 use beegit_core::{BeeGitError, ErrorCode, Result};
 use std::path::PathBuf;
 
+/// The scheme prefix that selects the gRPC-Web transport over HTTPS.
+pub const GRPC_WEB_SCHEME: &str = "grpc-web+https://";
+
 /// Where a client connects: a daemon Unix socket or an HTTPS server (SPEC 6.4).
 #[derive(Clone, Debug)]
 pub enum Endpoint {
@@ -10,22 +13,38 @@ pub enum Endpoint {
     Unix(PathBuf),
     /// `https://host:port`.
     Https(String),
+    /// `grpc-web+https://host:port`: the same server, but calls are framed as gRPC-Web, which
+    /// carries the status and trailers inside the response body. Use it behind proxies that
+    /// drop HTTP/2 trailers (Cloudflare Tunnel public hostnames). The value is the canonical
+    /// `https://host[:port]` URL that is connected to.
+    GrpcWeb(String),
 }
 
 fn bad(s: &str, why: &str) -> BeeGitError {
     BeeGitError::new(
         ErrorCode::InvalidArgument,
-        format!("invalid endpoint {s:?}: {why} (expected unix:///abs/path or https://host:port)"),
+        format!(
+            "invalid endpoint {s:?}: {why} (expected unix:///abs/path, https://host:port or \
+             grpc-web+https://host:port)"
+        ),
     )
 }
 
 impl Endpoint {
-    /// Parse `unix:///abs/path` or `https://host:port` (INVALID_ARGUMENT otherwise).
+    /// Parse `unix:///abs/path`, `https://host:port` or `grpc-web+https://host:port`
+    /// (INVALID_ARGUMENT otherwise).
     ///
     /// The HTTPS form keeps its canonical text `https://host[:port]` (a single trailing `/` is
     /// dropped); a path, query, userinfo or empty host is rejected. Plain `http://` is rejected
     /// because TLS is REQUIRED between clients and servers (SPEC 17).
     pub fn parse(s: &str) -> Result<Self> {
+        if let Some(rest) = s.strip_prefix(GRPC_WEB_SCHEME) {
+            return match Self::parse(&format!("https://{rest}")) {
+                Ok(Endpoint::Https(url)) => Ok(Endpoint::GrpcWeb(url)),
+                Ok(_) => Err(bad(s, "only host and port are allowed")),
+                Err(_) => Err(bad(s, "malformed host or port")),
+            };
+        }
         if let Some(path) = s.strip_prefix("unix://") {
             if !path.starts_with('/') {
                 return Err(bad(s, "unix socket path must be absolute"));
@@ -89,6 +108,10 @@ impl std::fmt::Display for Endpoint {
         match self {
             Endpoint::Unix(p) => write!(f, "unix://{}", p.display()),
             Endpoint::Https(u) => f.write_str(u),
+            Endpoint::GrpcWeb(u) => {
+                let authority = u.strip_prefix("https://").unwrap_or(u);
+                write!(f, "{GRPC_WEB_SCHEME}{authority}")
+            }
         }
     }
 }
@@ -131,6 +154,38 @@ mod tests {
     }
 
     #[test]
+    fn parses_grpc_web() {
+        for (s, url, text) in [
+            (
+                "grpc-web+https://beegit.example.com",
+                "https://beegit.example.com",
+                "grpc-web+https://beegit.example.com",
+            ),
+            (
+                "grpc-web+https://127.0.0.1:8443/",
+                "https://127.0.0.1:8443",
+                "grpc-web+https://127.0.0.1:8443",
+            ),
+            (
+                "grpc-web+https://[::1]:9000",
+                "https://[::1]:9000",
+                "grpc-web+https://[::1]:9000",
+            ),
+        ] {
+            let ep = Endpoint::parse(s).unwrap();
+            match &ep {
+                Endpoint::GrpcWeb(u) => assert_eq!(u, url),
+                e => panic!("{e:?}"),
+            }
+            assert_eq!(ep.to_string(), text);
+            assert!(matches!(
+                Endpoint::parse(text).unwrap(),
+                Endpoint::GrpcWeb(_)
+            ));
+        }
+    }
+
+    #[test]
     fn rejects_invalid() {
         for s in [
             "",
@@ -149,6 +204,11 @@ mod tests {
             "https://user@host:1",
             "https://host:1?q",
             "grpc://host:1",
+            "grpc-web+https://",
+            "grpc-web+https://host/path",
+            "grpc-web+https://host:0",
+            "grpc-web+unix:///tmp/s",
+            "grpc-web+http://host:1",
         ] {
             let e = Endpoint::parse(s).unwrap_err();
             assert_eq!(e.code, ErrorCode::InvalidArgument, "{s}");
